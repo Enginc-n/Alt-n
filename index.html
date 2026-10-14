@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Altın Analiz Ajanı</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{--bg:#0f1115;--panel:#181b22;--text:#e6e6e6;--muted:#8a90a0;--gold:#d4af37;--up:#26a69a;--down:#ef5350}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
+header{padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #262a33}
+h1{font-size:18px;margin:0 12px 0 0;color:var(--gold)}
+select,button{background:var(--panel);color:var(--text);border:1px solid #333;border-radius:6px;padding:6px 10px}
+#price{font-weight:700;font-size:18px;margin-left:auto}
+main{display:grid;grid-template-columns:1fr 340px;gap:12px;padding:12px 16px}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+#chart{height:460px}#rsi{height:120px;margin-top:6px}
+.card{background:var(--panel);border-radius:8px;padding:12px;margin-bottom:12px}
+.card h2{font-size:14px;margin:0 0 8px;color:var(--muted);text-transform:uppercase}
+.big{font-size:26px;font-weight:800}.buy{color:var(--up)}.sell{color:var(--down)}.hold{color:var(--gold)}
+table{width:100%;font-size:13px;border-collapse:collapse}td{padding:3px 0}td:last-child{text-align:right}
+ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
+.note{font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🟡 Altın Analiz Ajanı</h1>
+  <select id="tf">
+    <option value="15m">15 dk</option><option value="1h">1 saat</option>
+    <option value="4h" selected>4 saat</option><option value="1d">Günlük</option>
+  </select>
+  <button id="refresh">Yenile</button>
+  <span id="src" class="note"></span>
+  <span id="price">—</span>
+</header>
+<main>
+  <section>
+    <div id="chart"></div>
+    <div id="rsi"></div>
+    <p class="note">Mum: XAU/USD karşılığı (PAXG/USDT, 1 PAXG = 1 ons altın). Turuncu: EMA20, mavi: EMA50, mor: SMA200, gri: Bollinger. Oklar: geçmiş al/sat sinyalleri. Şeffaf mumlar: ajanın öngördüğü sanal mumlar (ana senaryo); kırmızı kesikli çizgi: alternatif senaryo.</p>
+  </section>
+  <aside>
+    <div class="card"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
+    <div class="card"><h2>İleriye dönük senaryo</h2><ul id="scen"></ul></div>
+    <div class="card"><h2>Tespit edilen olaylar</h2><ul id="events"></ul></div>
+    <div class="card"><h2>İşlem planı</h2><table id="plan"></table></div>
+    <div class="card"><h2>Göstergeler</h2><table id="ind"></table></div>
+    <div class="card"><h2>Gerekçeler</h2><ul id="why"></ul></div>
+    <div class="card"><h2>Yükseliş / düşüş için ne gerekir?</h2><ul id="need"></ul></div>
+    <p class="note">⚠️ Bu araç teknik analiz üretir, yatırım tavsiyesi değildir. Hiçbir yazılım fiyatı yükseltemez ya da düşüremez; yalnızca olasılıkları değerlendirir. Her işlemde zarar-durdur kullanın.</p>
+  </aside>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = v => v == null || isNaN(v) ? '—' : v.toLocaleString('tr-TR', {maximumFractionDigits: 2});
+
+// ---------- Veri ----------
+async function loadData(tf) {
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=${tf}&limit=500`);
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    $('src').textContent = 'Canlı veri: Binance PAXG/USDT';
+    return d.map(k => ({time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4]}));
+  } catch {
+    $('src').textContent = '⚠️ Canlı veri alınamadı – demo veri gösteriliyor';
+    const out = []; let p = 2650, t = Math.floor(Date.now() / 1000) - 500 * 14400;
+    for (let i = 0; i < 500; i++, t += 14400) {
+      const o = p; p *= 1 + (Math.random() - 0.48) * 0.012;
+      out.push({time: t, open: o, close: p, high: Math.max(o, p) * (1 + Math.random() * 0.004), low: Math.min(o, p) * (1 - Math.random() * 0.004)});
+    }
+    return out;
+  }
+}
+
+// ---------- Göstergeler ----------
+const sma = (a, n) => a.map((_, i) => i < n - 1 ? null : a.slice(i - n + 1, i + 1).reduce((s, x) => s + x, 0) / n);
+function ema(a, n) { const k = 2 / (n + 1); let e = null; return a.map((x, i) => (e = i === 0 ? x : x * k + e * (1 - k))); }
+function rsi(c, n = 14) {
+  const out = Array(c.length).fill(null); let g = 0, l = 0;
+  for (let i = 1; i < c.length; i++) {
+    const d = c[i] - c[i - 1], up = Math.max(d, 0), dn = Math.max(-d, 0);
+    if (i <= n) { g += up / n; l += dn / n; if (i === n) out[i] = 100 - 100 / (1 + g / (l || 1e-9)); }
+    else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; out[i] = 100 - 100 / (1 + g / (l || 1e-9)); }
+  }
+  return out;
+}
+function atr(d, n = 14) {
+  const tr = d.map((k, i) => i === 0 ? k.high - k.low : Math.max(k.high - k.low, Math.abs(k.high - d[i - 1].close), Math.abs(k.low - d[i - 1].close)));
+  return ema(tr, n);
+}
+function bollinger(c, n = 20, m = 2) {
+  const mid = sma(c, n);
+  return mid.map((v, i) => { if (v == null) return null; const s = c.slice(i - n + 1, i + 1); const sd = Math.sqrt(s.reduce((a, x) => a + (x - v) ** 2, 0) / n); return {up: v + m * sd, mid: v, lo: v - m * sd}; });
+}
+function levels(d, w = 5) {
+  const piv = [];
+  for (let i = w; i < d.length - w; i++) {
+    const s = d.slice(i - w, i + w + 1);
+    if (d[i].high === Math.max(...s.map(k => k.high))) piv.push(d[i].high);
+    if (d[i].low === Math.min(...s.map(k => k.low))) piv.push(d[i].low);
+  }
+  // yakın seviyeleri kümeleme
+  piv.sort((a, b) => a - b); const cl = [];
+  for (const p of piv) { const c = cl[cl.length - 1]; if (c && Math.abs(p - c.v) / c.v < 0.004) { c.v = (c.v * c.n + p) / (c.n + 1); c.n++; } else cl.push({v: p, n: 1}); }
+  return cl.filter(c => c.n >= 2).map(c => c.v);
+}
+
+// ---------- Ajan ----------
+function analyze(d) {
+  const c = d.map(k => k.close), L = c.length - 1, price = c[L];
+  const e20 = ema(c, 20), e50 = ema(c, 50), s200 = sma(c, 200), r = rsi(c), a = atr(d), bb = bollinger(c);
+  const e12 = ema(c, 12), e26 = ema(c, 26), macd = e12.map((x, i) => x - e26[i]), sig = ema(macd, 9), hist = macd.map((x, i) => x - sig[i]);
+  const lv = levels(d);
+  const sup = lv.filter(v => v < price).sort((x, y) => y - x), res = lv.filter(v => v > price).sort((x, y) => x - y);
+
+  let score = 0; const why = [];
+  const add = (p, t) => { score += p; why.push((p > 0 ? '🟢 ' : p < 0 ? '🔴 ' : '⚪ ') + t); };
+  if (s200[L]) add(price > s200[L] ? 2 : -2, `Fiyat SMA200 ${price > s200[L] ? 'üzerinde (ana trend yukarı)' : 'altında (ana trend aşağı)'}`);
+  add(e20[L] > e50[L] ? 1.5 : -1.5, `EMA20 ${e20[L] > e50[L] ? '>' : '<'} EMA50 (orta vade ${e20[L] > e50[L] ? 'yükseliş' : 'düşüş'})`);
+  if (r[L] < 30) add(2, `RSI ${r[L].toFixed(1)} – aşırı satım, tepki alımı olası`);
+  else if (r[L] > 70) add(-2, `RSI ${r[L].toFixed(1)} – aşırı alım, düzeltme riski`);
+  else add(r[L] > 50 ? 0.5 : -0.5, `RSI ${r[L].toFixed(1)} – nötr bölge`);
+  add(hist[L] > 0 ? 1 : -1, `MACD histogramı ${hist[L] > 0 ? 'pozitif' : 'negatif'}${Math.sign(hist[L]) !== Math.sign(hist[L - 1]) ? ' (YENİ KESİŞİM)' : ''}`);
+  if (bb[L]) { if (price < bb[L].lo) add(1, 'Fiyat alt Bollinger bandının altında'); else if (price > bb[L].up) add(-1, 'Fiyat üst Bollinger bandının üzerinde'); }
+  if (sup[0] && (price - sup[0]) < a[L]) add(1, `Desteğe yakın (${fmt(sup[0])})`);
+  if (res[0] && (res[0] - price) < a[L]) add(-1, `Dirence yakın (${fmt(res[0])})`);
+
+  const verdict = score >= 3 ? 'GÜÇLÜ AL' : score >= 1 ? 'AL' : score <= -3 ? 'GÜÇLÜ SAT' : score <= -1 ? 'SAT' : 'BEKLE';
+  const long = score >= 0, A = a[L];
+  const stop = long ? Math.min(price - 1.5 * A, (sup[0] ?? price) - 0.3 * A) : Math.max(price + 1.5 * A, (res[0] ?? price) + 0.3 * A);
+  const risk = Math.abs(price - stop);
+  const tp1 = long ? (res[0] && res[0] - price > risk ? res[0] : price + 1.5 * risk) : (sup[0] && price - sup[0] > risk ? sup[0] : price - 1.5 * risk);
+  const tp2 = long ? price + 3 * risk : price - 3 * risk;
+
+  // geçmiş sinyaller: EMA20/50 kesişimi + RSI filtresi
+  const marks = [];
+  for (let i = 51; i <= L; i++) {
+    if (e20[i - 1] < e50[i - 1] && e20[i] > e50[i] && r[i] < 70) marks.push({time: d[i].time, position: 'belowBar', color: '#26a69a', shape: 'arrowUp', text: 'AL'});
+    if (e20[i - 1] > e50[i - 1] && e20[i] < e50[i] && r[i] > 30) marks.push({time: d[i].time, position: 'aboveBar', color: '#ef5350', shape: 'arrowDown', text: 'SAT'});
+  }
+  // ---------- İleriye dönük senaryo (sanal mumlar) ----------
+  const dt = d[L].time - d[L - 1].time, near = x => x != null && Math.abs(price - x) < 1.2 * A;
+  let path, scen, alt;
+  if (long) {
+    if (near(sup[0]) || !sup[0]) { path = [[price, 0], [tp1, 14], [tp2, 26]]; scen = `Fiyat ${fmt(sup[0] ?? price)} desteğinden dönebilir; hedef ${fmt(tp1)} → ${fmt(tp2)}.`; }
+    else { path = [[price, 0], [sup[0], 8], [tp1, 20], [tp2, 30]]; scen = `Önce ${fmt(sup[0])} desteğine geri çekilme, ardından buradan dönüşle ${fmt(tp1)} hedefi.`; }
+    alt = `Alternatif: ${fmt(stop)} altında kapanış olursa senaryo bozulur, ${fmt(sup[1] ?? price - 3 * A)} test edilebilir.`;
+  } else {
+    if (near(res[0]) || !res[0]) { path = [[price, 0], [tp1, 14], [tp2, 26]]; scen = `Fiyat ${fmt(res[0] ?? price)} direncinden geri dönebilir; hedef ${fmt(tp1)} → ${fmt(tp2)}.`; }
+    else { path = [[price, 0], [res[0], 8], [tp1, 20], [tp2, 30]]; scen = `Önce ${fmt(res[0])} direncine tepki yükselişi, ardından satışla ${fmt(tp1)} hedefi.`; }
+    alt = `Alternatif: ${fmt(stop)} üzerinde kapanış olursa senaryo bozulur, ${fmt(res[1] ?? price + 3 * A)} test edilebilir.`;
+  }
+  let seed = Math.round(price * 100) % 9973; const rnd = () => ((seed = seed * 16807 % 2147483647) / 2147483647) - 0.5;
+  const ghost = []; let prev = price;
+  for (let s = 1; s < path.length; s++) {
+    const [p0, i0] = path[s - 1], [p1, i1] = path[s];
+    for (let i = i0 + 1; i <= i1; i++) {
+      const target = p0 + (p1 - p0) * (i - i0) / (i1 - i0), cl = target + rnd() * 0.6 * A;
+      ghost.push({time: d[L].time + i * dt, open: prev, close: cl, high: Math.max(prev, cl) + Math.abs(rnd()) * 0.5 * A, low: Math.min(prev, cl) - Math.abs(rnd()) * 0.5 * A});
+      prev = cl;
+    }
+  }
+  const altPath = [{time: d[L].time, value: price}, {time: d[L].time + 10 * dt, value: stop}, {time: d[L].time + 20 * dt, value: long ? (sup[1] ?? stop - 2 * A) : (res[1] ?? stop + 2 * A)}];
+
+  // ---------- Formasyon / olay tespiti ----------
+  const events = [];
+  const body = k => Math.abs(k.close - k.open), last = d[L], pv = d[L - 1];
+  if (last.close > last.open && pv.close < pv.open && last.close > pv.open && last.open < pv.close) events.push('🟢 Yutan boğa (bullish engulfing) formasyonu');
+  if (last.close < last.open && pv.close > pv.open && last.close < pv.open && last.open > pv.close) events.push('🔴 Yutan ayı (bearish engulfing) formasyonu');
+  const lw = Math.min(last.open, last.close) - last.low, uw = last.high - Math.max(last.open, last.close);
+  if (lw > 2 * body(last) && uw < body(last)) events.push('🟢 Çekiç (hammer) – alıcılar dipte devrede');
+  if (uw > 2 * body(last) && lw < body(last)) events.push('🔴 Kayan yıldız (shooting star) – satıcı baskısı');
+  if (body(last) < 0.1 * (last.high - last.low)) events.push('⚪ Doji – kararsızlık, yön teyidi bekleyin');
+  if (s200[L] && s200[L - 1] && Math.sign(e50[L] - s200[L]) !== Math.sign(e50[L - 1] - s200[L - 1])) events.push(e50[L] > s200[L] ? '🟢 Golden Cross (EMA50 ↑ SMA200)' : '🔴 Death Cross (EMA50 ↓ SMA200)');
+  const lb = 30, pmin = Math.min(...c.slice(L - lb, L - 5)), rmin = Math.min(...r.slice(L - lb, L - 5).filter(x => x != null));
+  if (price <= pmin * 1.002 && r[L] > rmin + 3) events.push('🟢 Pozitif RSI uyumsuzluğu – düşüş ivme kaybediyor');
+  const pmax = Math.max(...c.slice(L - lb, L - 5)), rmax = Math.max(...r.slice(L - lb, L - 5).filter(x => x != null));
+  if (price >= pmax * 0.998 && r[L] < rmax - 3) events.push('🔴 Negatif RSI uyumsuzluğu – yükseliş ivme kaybediyor');
+  if (bb[L] && bb[L - 20] && (bb[L].up - bb[L].lo) / bb[L].mid < 0.6 * (bb[L - 20].up - bb[L - 20].lo) / bb[L - 20].mid) events.push('⚡ Bollinger sıkışması – sert hareket yaklaşıyor');
+  if (res[0] && pv.close < res[0] && last.close > res[0]) events.push(`🟢 ${fmt(res[0])} direnci kırıldı`);
+  if (sup[0] && pv.close > sup[0] && last.close < sup[0]) events.push(`🔴 ${fmt(sup[0])} desteği kırıldı`);
+  if (!events.length) events.push('Son mumda belirgin bir formasyon yok.');
+
+  return {ghost, altPath, scen, alt, events, price, score, verdict, why, long, stop, tp1, tp2, risk, sup, res, e20, e50, s200, r, bb, macd: macd[L], hist: hist[L], atr: A, marks};
+}
+
+// ---------- Çizim ----------
+const opts = {localization: {locale: 'tr-TR'}, layout: {background: {color: '#0f1115'}, textColor: '#ccc'}, grid: {vertLines: {color: '#1d2028'}, horzLines: {color: '#1d2028'}}, timeScale: {timeVisible: true}};
+const chart = LightweightCharts.createChart($('chart'), opts);
+const rsiChart = LightweightCharts.createChart($('rsi'), {...opts, timeScale: {visible: false}});
+const candles = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350'});
+const line = (c, w = 1) => chart.addLineSeries({color: c, lineWidth: w, priceLineVisible: false, lastValueVisible: false});
+const sE20 = line('#ff9800', 2), sE50 = line('#2196f3', 2), sS200 = line('#ab47bc', 2), sBu = line('#555'), sBl = line('#555');
+const sGhost = chart.addCandlestickSeries({upColor: 'rgba(38,166,154,.35)', downColor: 'rgba(239,83,80,.35)', borderUpColor: '#26a69a', borderDownColor: '#ef5350', wickUpColor: 'rgba(38,166,154,.6)', wickDownColor: 'rgba(239,83,80,.6)', priceLineVisible: false, lastValueVisible: false});
+const sAlt = chart.addLineSeries({color: '#ff1744', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false});
+const sRsi = rsiChart.addLineSeries({color: '#d4af37', lineWidth: 1});
+let priceLines = [];
+new ResizeObserver(() => { chart.applyOptions({width: $('chart').clientWidth}); rsiChart.applyOptions({width: $('rsi').clientWidth}); }).observe($('chart'));
+chart.timeScale().subscribeVisibleLogicalRangeChange(r => r && rsiChart.timeScale().setVisibleLogicalRange(r));
+
+async function run() {
+  const d = await loadData($('tf').value), A = analyze(d);
+  const ser = arr => d.map((k, i) => arr[i] == null ? {time: k.time} : {time: k.time, value: arr[i]});
+  candles.setData(d); candles.setMarkers(A.marks);
+  sE20.setData(ser(A.e20)); sE50.setData(ser(A.e50)); sS200.setData(ser(A.s200));
+  sBu.setData(ser(A.bb.map(b => b && b.up))); sBl.setData(ser(A.bb.map(b => b && b.lo)));
+  sRsi.setData(ser(A.r)); sGhost.setData(A.ghost); sAlt.setData(A.altPath);
+  $('scen').innerHTML = `<li>🔮 <b>Ana senaryo:</b> ${A.scen}</li><li>⚠️ ${A.alt}</li>`;
+  $('events').innerHTML = A.events.map(e => `<li>${e}</li>`).join('');
+  priceLines.forEach(p => candles.removePriceLine(p));
+  priceLines = [
+    ...A.sup.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#26a69a', lineStyle: 2, title: 'Destek'})),
+    ...A.res.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#ef5350', lineStyle: 2, title: 'Direnç'})),
+    candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}),
+    candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef 1'}),
+  ];
+
+  $('price').textContent = '$' + fmt(A.price);
+  const cls = A.verdict.includes('AL') ? 'buy' : A.verdict.includes('SAT') ? 'sell' : 'hold';
+  $('verdict').className = 'big ' + cls; $('verdict').textContent = A.verdict;
+  $('score').textContent = `Skor: ${A.score.toFixed(1)} (−8 … +8)`;
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  $('plan').innerHTML = row('Yön', A.long ? '📈 Alım (long)' : '📉 Satım (short)') + row('Giriş', fmt(A.price)) +
+    row('Zarar-durdur', fmt(A.stop)) + row('Hedef 1', fmt(A.tp1)) + row('Hedef 2', fmt(A.tp2)) +
+    row('Risk/Ödül (H2)', '1 : ' + (Math.abs(A.tp2 - A.price) / A.risk).toFixed(1)) +
+    row('Alım bölgesi', A.sup[0] ? fmt(A.sup[0]) + ' civarı' : '—') + row('Satım bölgesi', A.res[0] ? fmt(A.res[0]) + ' civarı' : '—');
+  const L = A.r.length - 1;
+  $('ind').innerHTML = row('RSI(14)', fmt(A.r[L])) + row('MACD hist.', fmt(A.hist)) + row('EMA20', fmt(A.e20[L])) + row('EMA50', fmt(A.e50[L])) +
+    row('SMA200', fmt(A.s200[L])) + row('ATR(14)', fmt(A.atr)) + row('Destekler', A.sup.slice(0, 3).map(fmt).join(' / ') || '—') + row('Dirençler', A.res.slice(0, 3).map(fmt).join(' / ') || '—');
+  $('why').innerHTML = A.why.map(w => `<li>${w}</li>`).join('');
+  const r1 = A.res[0], s1 = A.sup[0];
+  $('need').innerHTML = [
+    `📈 <b>Yükseliş için:</b> ${r1 ? fmt(r1) + ' direncinin mum kapanışıyla aşılması' : 'yeni zirve kırılımı'}, RSI'ın 50 üstünde kalması, EMA20'nin EMA50 üzerinde tutunması.`,
+    `📉 <b>Düşüş için:</b> ${s1 ? fmt(s1) + ' desteğinin aşağı kırılması' : 'son dibin kırılması'}, MACD'nin negatife dönmesi, SMA200 (${fmt(A.s200[L])}) altına sarkma.`,
+    `🌍 <b>Temel etkenler:</b> Fed faiz indirimi, zayıf dolar (DXY↓), düşen reel faizler, jeopolitik risk ve merkez bankası alımları altını yükseltir; tersi düşürür.`,
+  ].map(x => `<li>${x}</li>`).join('');
+}
+$('refresh').onclick = run; $('tf').onchange = run;
+run(); setInterval(run, 60000);
+</script>
+</body>
+</html>
