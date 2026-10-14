@@ -6,6 +6,8 @@ Altın (XAU/USD) için tarayıcıda çalışan teknik analiz uygulaması. `index
 - EMA20/50, SMA200, Bollinger, RSI, MACD, ATR
 - Otomatik destek/direnç, AL/SAT kararı ve işlem planı (stop, hedefler)
 - Sanal öngörü mumları ve alternatif senaryo
-- Mum formasyonu ve olay tespiti
+- Mum formasyonu, ani hareket ve kritik seviye uyarıları
+- Geriye dönük test (kazanma oranı, R sonucu, kâr faktörü, maks. düşüş)
+- Tekniklerin açıklamaları
 
 ⚠️ Yatırım tavsiyesi değildir.

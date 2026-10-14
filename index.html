@@ -47,8 +47,20 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <div class="card"><h2>Tespit edilen olaylar</h2><ul id="events"></ul></div>
     <div class="card"><h2>İşlem planı</h2><table id="plan"></table></div>
     <div class="card"><h2>Göstergeler</h2><table id="ind"></table></div>
+    <div class="card"><h2>Geriye dönük test</h2><table id="bt"></table><div id="btcurve"></div><p id="btnote" class="note"></p>
+      <p class="note">Kural: skor ≥ +3 → long, ≤ −3 → short; mum kapanışında giriş, zarar-durdur (−1R) veya Hedef 1'de çıkış. Grafikte sarı oklar test girişleri, yeşil/kırmızı noktalar çıkışlardır. Komisyon/kayma dahil değildir.</p></div>
     <div class="card"><h2>Gerekçeler</h2><ul id="why"></ul></div>
     <div class="card"><h2>Yükseliş / düşüş için ne gerekir?</h2><ul id="need"></ul></div>
+    <div class="card"><h2>Teknikler – neden artar, neden düşer?</h2>
+      <details><summary><b>Trend (EMA20/50, SMA200)</b></summary><p class="note">Fiyat SMA200 üzerindeyse ana trend yukarıdır; kurumlar bu çizgiyi izler. EMA20'nin EMA50'yi yukarı kesmesi kısa vadeli alıcıların güçlendiğini gösterir. Golden Cross (EMA50 ↑ SMA200) uzun vadeli boğa, Death Cross ayı sinyalidir.</p></details>
+      <details><summary><b>RSI (Göreceli Güç)</b></summary><p class="note">0–100 arası ivme ölçer. 70 üstü aşırı alım (kâr satışı gelebilir), 30 altı aşırı satım (tepki alımı gelebilir). Fiyat yeni dip yaparken RSI yapmıyorsa (pozitif uyumsuzluk) düşüş gücünü kaybediyor demektir.</p></details>
+      <details><summary><b>MACD</b></summary><p class="note">12 ve 26 dönemlik EMA farkı. Histogram sıfırı yukarı keserse momentum alıcılara, aşağı keserse satıcılara geçer.</p></details>
+      <details><summary><b>Bollinger Bantları</b></summary><p class="note">Ortalama ±2 standart sapma. Bantlar daralınca (sıkışma) volatilite birikir ve genelde sert bir kırılım gelir. Bant dışı kapanışlar aşırı uzamayı gösterir.</p></details>
+      <details><summary><b>Destek / Direnç</b></summary><p class="note">Fiyatın geçmişte defalarca döndüğü bölgeler; bekleyen emirler burada yoğunlaşır. Destek kırılınca stoplar tetiklenir ve düşüş hızlanır; direnç kırılınca yeni alıcılar girer ve eski direnç desteğe dönüşür.</p></details>
+      <details><summary><b>ATR ve risk yönetimi</b></summary><p class="note">ATR ortalama mum aralığıdır. Stop ATR'nin 1,5 katı uzağa konur ki normal dalgalanmada tetiklenmesin. İşlem başına sermayenin %1–2'sinden fazlası riske edilmemelidir.</p></details>
+      <details><summary><b>Mum formasyonları</b></summary><p class="note">Çekiç: dipte uzun alt fitil, alıcılar geri döndü. Kayan yıldız: tepede uzun üst fitil, satıcılar bastırdı. Yutan formasyon: yeni mum öncekini tamamen kaplar, yön değişimi sinyali. Doji: kararsızlık.</p></details>
+      <details><summary><b>Ani hareketler neden olur?</b></summary><p class="note">ABD enflasyon (TÜFE), istihdam (Non-Farm Payrolls), Fed faiz kararları ve Powell konuşmaları altında dakikalar içinde 20–50$ hareket yaratabilir. Jeopolitik krizler ani yükseliş, güçlü dolar ve yükselen reel faiz düşüş getirir. Bu saatlerde spread açılır, stoplar kayabilir.</p></details>
+    </div>
     <p class="note">⚠️ Bu araç teknik analiz üretir, yatırım tavsiyesi değildir. Hiçbir yazılım fiyatı yükseltemez ya da düşüremez; yalnızca olasılıkları değerlendirir. Her işlemde zarar-durdur kullanın.</p>
   </aside>
 </main>
@@ -182,6 +194,11 @@ function analyze(d) {
   if (bb[L] && bb[L - 20] && (bb[L].up - bb[L].lo) / bb[L].mid < 0.6 * (bb[L - 20].up - bb[L - 20].lo) / bb[L - 20].mid) events.push('⚡ Bollinger sıkışması – sert hareket yaklaşıyor');
   if (res[0] && pv.close < res[0] && last.close > res[0]) events.push(`🟢 ${fmt(res[0])} direnci kırıldı`);
   if (sup[0] && pv.close > sup[0] && last.close < sup[0]) events.push(`🔴 ${fmt(sup[0])} desteği kırıldı`);
+  if (last.high - last.low > 2 * A) events.push(`⚡ ANİ HAREKET: son mum aralığı ATR'nin ${((last.high - last.low) / A).toFixed(1)} katı – haber/likidite etkisi olabilir, stopları genişletin veya bekleyin`);
+  const mv = price - c[L - 5];
+  if (Math.abs(mv) > 2.5 * A) events.push(`${mv > 0 ? '🚀' : '💥'} Son 5 mumda ${fmt(Math.abs(mv))}$ ${mv > 0 ? 'yükseliş' : 'düşüş'} (≈${(Math.abs(mv) / A).toFixed(1)} ATR) – aşırı uzama, geri dönüş riski artıyor`);
+  if (res[0] && res[0] - price < 0.3 * A) events.push(`🎯 KRİTİK: fiyat ${fmt(res[0])} direncine dayandı – kırılırsa hızlanabilir, kırılamazsa sert geri çekilme`);
+  if (sup[0] && price - sup[0] < 0.3 * A) events.push(`🎯 KRİTİK: fiyat ${fmt(sup[0])} desteğinde – tutarsa dönüş, kırılırsa stop avı ile hızlı düşüş`);
   if (!events.length) events.push('Son mumda belirgin bir formasyon yok.');
 
   return {ghost, altPath, scen, alt, events, price, score, verdict, why, long, stop, tp1, tp2, risk, sup, res, e20, e50, s200, r, bb, macd: macd[L], hist: hist[L], atr: A, marks};
@@ -201,11 +218,48 @@ let priceLines = [];
 new ResizeObserver(() => { chart.applyOptions({width: $('chart').clientWidth}); rsiChart.applyOptions({width: $('rsi').clientWidth}); }).observe($('chart'));
 chart.timeScale().subscribeVisibleLogicalRangeChange(r => r && rsiChart.timeScale().setVisibleLogicalRange(r));
 
+// ---------- Geriye dönük test ----------
+let btMarks = [];
+function backtest(d) {
+  const trades = []; let pos = null, eq = 0, peak = 0, dd = 0; const curve = [0];
+  for (let i = 250; i < d.length; i++) {
+    const k = d[i];
+    if (pos) {
+      let R = null;
+      if (pos.long) { if (k.low <= pos.stop) R = -1; else if (k.high >= pos.tp) R = (pos.tp - pos.entry) / pos.risk; }
+      else { if (k.high >= pos.stop) R = -1; else if (k.low <= pos.tp) R = (pos.entry - pos.tp) / pos.risk; }
+      if (R != null) {
+        trades.push({...pos, R, exit: k.time}); eq += R; peak = Math.max(peak, eq); dd = Math.max(dd, peak - eq); curve.push(eq); pos = null;
+      }
+      continue;
+    }
+    const A = analyze(d.slice(0, i + 1));
+    if (Math.abs(A.score) >= 3) pos = {entry: A.price, stop: A.stop, tp: A.tp1, long: A.long, risk: A.risk, time: k.time};
+  }
+  const wins = trades.filter(t => t.R > 0), gw = wins.reduce((a, t) => a + t.R, 0), gl = trades.length - wins.length;
+  btMarks = trades.flatMap(t => [
+    {time: t.time, position: t.long ? 'belowBar' : 'aboveBar', color: '#d4af37', shape: t.long ? 'arrowUp' : 'arrowDown', text: t.long ? 'T-AL' : 'T-SAT'},
+    {time: t.exit, position: 'inBar', color: t.R > 0 ? '#00e676' : '#ff1744', shape: 'circle', text: (t.R > 0 ? '+' : '') + t.R.toFixed(1) + 'R'},
+  ]);
+  return {n: trades.length, win: trades.length ? wins.length / trades.length * 100 : 0, total: eq, pf: gl ? gw / gl : Infinity, dd, curve, open: pos};
+}
+function showBacktest(B) {
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  const W = 300, H = 60, mn = Math.min(...B.curve), mx = Math.max(...B.curve, mn + 1);
+  const pts = B.curve.map((v, i) => `${(i / Math.max(1, B.curve.length - 1) * W).toFixed(1)},${(H - (v - mn) / (mx - mn) * H).toFixed(1)}`).join(' ');
+  $('bt').innerHTML = row('İşlem sayısı', B.n) + row('Kazanma oranı', '%' + B.win.toFixed(0)) +
+    row('Toplam sonuç', `<b class="${B.total >= 0 ? 'buy' : 'sell'}">${B.total >= 0 ? '+' : ''}${B.total.toFixed(1)}R</b>`) +
+    row('Kâr faktörü', isFinite(B.pf) ? B.pf.toFixed(2) : '∞') + row('Maks. düşüş', B.dd.toFixed(1) + 'R') +
+    row('Açık pozisyon', B.open ? (B.open.long ? 'Long @ ' : 'Short @ ') + fmt(B.open.entry) : 'Yok');
+  $('btcurve').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}"><polyline fill="none" stroke="#d4af37" stroke-width="2" points="${pts}"/></svg>`;
+  $('btnote').textContent = B.n < 10 ? 'Az işlem var; sonuç istatistiksel olarak güvenilir değil. Günlük/4 saatlik grafikte deneyin.' :
+    B.total > 0 ? 'Bu dönemde strateji kârlı. Geçmiş performans geleceği garanti etmez.' : 'Bu dönemde strateji zararda – bu piyasa koşulunda sinyallere temkinli yaklaşın.';
+}
 let data = [], ws = null, dirty = false, lastPrice = null;
 function render() {
   const d = data, A = analyze(d);
   const ser = arr => d.map((k, i) => arr[i] == null ? {time: k.time} : {time: k.time, value: arr[i]});
-  candles.setData(d); candles.setMarkers(A.marks);
+  candles.setData(d); candles.setMarkers([...A.marks, ...btMarks].sort((x, y) => x.time - y.time));
   sE20.setData(ser(A.e20)); sE50.setData(ser(A.e50)); sS200.setData(ser(A.s200));
   sBu.setData(ser(A.bb.map(b => b && b.up))); sBl.setData(ser(A.bb.map(b => b && b.lo)));
   sRsi.setData(ser(A.r)); sGhost.setData(A.ghost); sAlt.setData(A.altPath);
@@ -262,7 +316,7 @@ function connect(tf) {
 }
 async function run() {
   const tf = $('tf').value;
-  data = await loadData(tf); render();
+  data = await loadData(tf); showBacktest(backtest(data)); render();
   if (!$('src').textContent.startsWith('⚠️')) connect(tf);
 }
 // analiz ve sanal mumlar saniyede bir güncellenir, fiyat ise her işlemde anında
