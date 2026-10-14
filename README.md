@@ -10,6 +10,7 @@ Altın (XAU/USD) için tarayıcıda çalışan teknik analiz uygulaması. `index
 - Geriye dönük test (kazanma oranı, R sonucu, kâr faktörü, maks. düşüş)
 - ⚡ Scalp modu: 1–5 dk grafik, EMA9/21, dar stop, 1R–2R hedef
 - Pip & lot hesaplayıcı (stop/hedef mesafeleri pip cinsinden)
+- 📱 Mobil uyumlu: alt sinyal çubuğu, ana ekrana eklenebilir (PWA), sinyal değişince titreşim + bildirim
 - Tekniklerin açıklamaları
 
 ⚠️ Yatırım tavsiyesi değildir.
