@@ -32,6 +32,7 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
   </select>
   <button id="refresh">Yenile</button>
   <span id="src" class="note"></span>
+  <span id="live" class="note"></span>
   <span id="price">—</span>
 </header>
 <main>
@@ -200,8 +201,9 @@ let priceLines = [];
 new ResizeObserver(() => { chart.applyOptions({width: $('chart').clientWidth}); rsiChart.applyOptions({width: $('rsi').clientWidth}); }).observe($('chart'));
 chart.timeScale().subscribeVisibleLogicalRangeChange(r => r && rsiChart.timeScale().setVisibleLogicalRange(r));
 
-async function run() {
-  const d = await loadData($('tf').value), A = analyze(d);
+let data = [], ws = null, dirty = false, lastPrice = null;
+function render() {
+  const d = data, A = analyze(d);
   const ser = arr => d.map((k, i) => arr[i] == null ? {time: k.time} : {time: k.time, value: arr[i]});
   candles.setData(d); candles.setMarkers(A.marks);
   sE20.setData(ser(A.e20)); sE50.setData(ser(A.e50)); sS200.setData(ser(A.s200));
@@ -217,7 +219,7 @@ async function run() {
     candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef 1'}),
   ];
 
-  $('price').textContent = '$' + fmt(A.price);
+  showPrice(A.price);
   const cls = A.verdict.includes('AL') ? 'buy' : A.verdict.includes('SAT') ? 'sell' : 'hold';
   $('verdict').className = 'big ' + cls; $('verdict').textContent = A.verdict;
   $('score').textContent = `Skor: ${A.score.toFixed(1)} (−8 … +8)`;
@@ -237,8 +239,36 @@ async function run() {
     `🌍 <b>Temel etkenler:</b> Fed faiz indirimi, zayıf dolar (DXY↓), düşen reel faizler, jeopolitik risk ve merkez bankası alımları altını yükseltir; tersi düşürür.`,
   ].map(x => `<li>${x}</li>`).join('');
 }
+// ---------- Canlı akış (Binance WebSocket) ----------
+function showPrice(p) {
+  const el = $('price');
+  el.textContent = '$' + fmt(p);
+  if (lastPrice != null && p !== lastPrice) el.style.color = p > lastPrice ? 'var(--up)' : 'var(--down)';
+  lastPrice = p;
+}
+function connect(tf) {
+  if (ws) { ws.onclose = null; ws.close(); }
+  ws = new WebSocket(`wss://stream.binance.com:9443/ws/paxgusdt@kline_${tf}`);
+  ws.onopen = () => { $('live').textContent = '🟢 CANLI'; };
+  ws.onmessage = e => {
+    const k = JSON.parse(e.data).k;
+    const bar = {time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c};
+    const last = data[data.length - 1];
+    if (last && last.time === bar.time) data[data.length - 1] = bar;
+    else if (!last || bar.time > last.time) { data.push(bar); if (data.length > 500) data.shift(); }
+    candles.update(bar); showPrice(bar.close); dirty = true;
+  };
+  ws.onclose = () => { $('live').textContent = '🔴 Bağlantı koptu, yeniden bağlanıyor…'; setTimeout(() => connect(tf), 3000); };
+}
+async function run() {
+  const tf = $('tf').value;
+  data = await loadData(tf); render();
+  if (!$('src').textContent.startsWith('⚠️')) connect(tf);
+}
+// analiz ve sanal mumlar saniyede bir güncellenir, fiyat ise her işlemde anında
+setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); } }, 1000);
 $('refresh').onclick = run; $('tf').onchange = run;
-run(); setInterval(run, 60000);
+run();
 </script>
 </body>
 </html>
