@@ -10,7 +10,7 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
 header{padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #262a33}
 h1{font-size:18px;margin:0 12px 0 0;color:var(--gold)}
-select,button{background:var(--panel);color:var(--text);border:1px solid #333;border-radius:6px;padding:6px 10px}
+input{width:110px;text-align:right}input,select,button{background:var(--panel);color:var(--text);border:1px solid #333;border-radius:6px;padding:6px 10px}
 #price{font-weight:700;font-size:18px;margin-left:auto}
 main{display:grid;grid-template-columns:1fr 340px;gap:12px;padding:12px 16px}
 @media(max-width:900px){main{grid-template-columns:1fr}}
@@ -46,6 +46,14 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <div class="card"><h2>İleriye dönük senaryo</h2><ul id="scen"></ul></div>
     <div class="card"><h2>Tespit edilen olaylar</h2><ul id="events"></ul></div>
     <div class="card"><h2>İşlem planı</h2><table id="plan"></table></div>
+    <div class="card"><h2>Pip &amp; lot hesaplayıcı</h2>
+      <table>
+        <tr><td>Bakiye ($)</td><td><input id="bal" type="number" value="1000" min="0"></td></tr>
+        <tr><td>Risk (%)</td><td><input id="riskp" type="number" value="1" min="0.1" step="0.1"></td></tr>
+        <tr><td>1 pip =</td><td><select id="pipsize"><option value="0.1">0,10$ (standart)</option><option value="0.01">0,01$</option><option value="1">1,00$</option></select></td></tr>
+      </table>
+      <table id="calc" style="margin-top:6px"></table>
+      <p class="note">Altında 1 standart lot = 100 ons. Fiyat 1$ hareket ederse 1 lotta ±100$ olur. Aracı kurumunuzun pip tanımını kontrol edin.</p></div>
     <div class="card"><h2>Göstergeler</h2><table id="ind"></table></div>
     <div class="card"><h2>Geriye dönük test</h2><table id="bt"></table><div id="btcurve"></div><p id="btnote" class="note"></p>
       <p class="note">Kural: skor ≥ +3 → long, ≤ −3 → short; mum kapanışında giriş, zarar-durdur (−1R) veya Hedef 1'de çıkış. Grafikte sarı oklar test girişleri, yeşil/kırmızı noktalar çıkışlardır. Komisyon/kayma dahil değildir.</p></div>
@@ -256,8 +264,26 @@ function showBacktest(B) {
     B.total > 0 ? 'Bu dönemde strateji kârlı. Geçmiş performans geleceği garanti etmez.' : 'Bu dönemde strateji zararda – bu piyasa koşulunda sinyallere temkinli yaklaşın.';
 }
 let data = [], ws = null, dirty = false, lastPrice = null;
+// ---------- Pip ve lot hesabı ----------
+// XAU/USD: 1 standart lot = 100 ons. Çoğu aracı kurumda 1 pip = 0,10$ → lot başına pip değeri 10$.
+const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
+const pipSize = () => +$('pipsize').value;
+const pips = diff => (Math.abs(diff) / pipSize()).toLocaleString('tr-TR', {maximumFractionDigits: 0});
+let lastA = null;
+function calc() {
+  if (!lastA) return;
+  const bal = +$('bal').value, rp = +$('riskp').value, ps = pipSize();
+  ['bal', 'riskp', 'pipsize'].forEach(id => store.set('altin_' + id, $(id).value));
+  const riskUsd = bal * rp / 100, stopPips = lastA.risk / ps, pipVal = ps * 100; // lot başına pip değeri
+  const lot = riskUsd / (stopPips * pipVal);
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  $('calc').innerHTML = row('Riske edilen', '$' + fmt(riskUsd)) + row('Stop mesafesi', fmt(stopPips) + ' pip') +
+    row('1 lot için pip değeri', '$' + fmt(pipVal)) + row('<b>Önerilen lot</b>', lot < 0.01 ? `<b class="sell">${lot.toFixed(3)} (min. 0,01 lot – bakiye/risk yetersiz)</b>` : `<b class="hold">${lot.toFixed(2)}</b>`) +
+    row('Hedef 1 kârı', '$' + fmt(Math.abs(lastA.tp1 - lastA.price) / ps * pipVal * lot)) +
+    row('Hedef 2 kârı', '$' + fmt(Math.abs(lastA.tp2 - lastA.price) / ps * pipVal * lot));
+}
 function render() {
-  const d = data, A = analyze(d);
+  const d = data, A = analyze(d); lastA = A;
   const ser = arr => d.map((k, i) => arr[i] == null ? {time: k.time} : {time: k.time, value: arr[i]});
   candles.setData(d); candles.setMarkers([...A.marks, ...btMarks].sort((x, y) => x.time - y.time));
   sE20.setData(ser(A.e20)); sE50.setData(ser(A.e50)); sS200.setData(ser(A.s200));
@@ -279,12 +305,15 @@ function render() {
   $('score').textContent = `Skor: ${A.score.toFixed(1)} (−8 … +8)`;
   const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
   $('plan').innerHTML = row('Yön', A.long ? '📈 Alım (long)' : '📉 Satım (short)') + row('Giriş', fmt(A.price)) +
-    row('Zarar-durdur', fmt(A.stop)) + row('Hedef 1', fmt(A.tp1)) + row('Hedef 2', fmt(A.tp2)) +
+    row('Zarar-durdur', `${fmt(A.stop)} <span class="note">(${pips(A.stop - A.price)} pip)</span>`) +
+    row('Hedef 1', `${fmt(A.tp1)} <span class="note">(${pips(A.tp1 - A.price)} pip)</span>`) +
+    row('Hedef 2', `${fmt(A.tp2)} <span class="note">(${pips(A.tp2 - A.price)} pip)</span>`) +
     row('Risk/Ödül (H2)', '1 : ' + (Math.abs(A.tp2 - A.price) / A.risk).toFixed(1)) +
     row('Alım bölgesi', A.sup[0] ? fmt(A.sup[0]) + ' civarı' : '—') + row('Satım bölgesi', A.res[0] ? fmt(A.res[0]) + ' civarı' : '—');
   const L = A.r.length - 1;
   $('ind').innerHTML = row('RSI(14)', fmt(A.r[L])) + row('MACD hist.', fmt(A.hist)) + row('EMA20', fmt(A.e20[L])) + row('EMA50', fmt(A.e50[L])) +
-    row('SMA200', fmt(A.s200[L])) + row('ATR(14)', fmt(A.atr)) + row('Destekler', A.sup.slice(0, 3).map(fmt).join(' / ') || '—') + row('Dirençler', A.res.slice(0, 3).map(fmt).join(' / ') || '—');
+    row('SMA200', fmt(A.s200[L])) + row('ATR(14)', `${fmt(A.atr)} (${pips(A.atr)} pip)`) + row('Destekler', A.sup.slice(0, 3).map(fmt).join(' / ') || '—') + row('Dirençler', A.res.slice(0, 3).map(fmt).join(' / ') || '—');
+  calc();
   $('why').innerHTML = A.why.map(w => `<li>${w}</li>`).join('');
   const r1 = A.res[0], s1 = A.sup[0];
   $('need').innerHTML = [
@@ -321,6 +350,7 @@ async function run() {
 }
 // analiz ve sanal mumlar saniyede bir güncellenir, fiyat ise her işlemde anında
 setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); } }, 1000);
+['bal', 'riskp', 'pipsize'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).oninput = () => { calc(); render(); }; });
 $('refresh').onclick = run; $('tf').onchange = run;
 run();
 </script>

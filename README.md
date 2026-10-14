@@ -8,6 +8,7 @@ Altın (XAU/USD) için tarayıcıda çalışan teknik analiz uygulaması. `index
 - Sanal öngörü mumları ve alternatif senaryo
 - Mum formasyonu, ani hareket ve kritik seviye uyarıları
 - Geriye dönük test (kazanma oranı, R sonucu, kâr faktörü, maks. düşüş)
+- Pip & lot hesaplayıcı (stop/hedef mesafeleri pip cinsinden)
 - Tekniklerin açıklamaları
 
 ⚠️ Yatırım tavsiyesi değildir.
