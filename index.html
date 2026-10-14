@@ -178,11 +178,11 @@ function analyze(d) {
   const dt = d[L].time - d[L - 1].time, near = x => x != null && Math.abs(price - x) < 1.2 * A;
   let path, scen, alt;
   if (long) {
-    if (near(sup[0]) || !sup[0]) { path = [[price, 0], [tp1, 14], [tp2, 26]]; scen = `Fiyat ${fmt(sup[0] ?? price)} desteğinden dönebilir; hedef ${fmt(tp1)} → ${fmt(tp2)}.`; }
+    if (near(sup[0]) || !sup[0] || SC) { path = [[price, 0], [tp1, 14], [tp2, 26]]; scen = SC ? `Kısa vadeli yükseliş beklentisi: önce ${fmt(tp1)}, sonra ${fmt(tp2)}. Stop ${fmt(stop)}.` : `Fiyat ${fmt(sup[0] ?? price)} desteğinden dönebilir; hedef ${fmt(tp1)} → ${fmt(tp2)}.`; }
     else { path = [[price, 0], [sup[0], 8], [tp1, 20], [tp2, 30]]; scen = `Önce ${fmt(sup[0])} desteğine geri çekilme, ardından buradan dönüşle ${fmt(tp1)} hedefi.`; }
     alt = `Alternatif: ${fmt(stop)} altında kapanış olursa senaryo bozulur, ${fmt(sup[1] ?? price - 3 * A)} test edilebilir.`;
   } else {
-    if (near(res[0]) || !res[0]) { path = [[price, 0], [tp1, 14], [tp2, 26]]; scen = `Fiyat ${fmt(res[0] ?? price)} direncinden geri dönebilir; hedef ${fmt(tp1)} → ${fmt(tp2)}.`; }
+    if (near(res[0]) || !res[0] || SC) { path = [[price, 0], [tp1, 14], [tp2, 26]]; scen = SC ? `Kısa vadeli düşüş beklentisi: önce ${fmt(tp1)}, sonra ${fmt(tp2)}. Stop ${fmt(stop)}.` : `Fiyat ${fmt(res[0] ?? price)} direncinden geri dönebilir; hedef ${fmt(tp1)} → ${fmt(tp2)}.`; }
     else { path = [[price, 0], [res[0], 8], [tp1, 20], [tp2, 30]]; scen = `Önce ${fmt(res[0])} direncine tepki yükselişi, ardından satışla ${fmt(tp1)} hedefi.`; }
     alt = `Alternatif: ${fmt(stop)} üzerinde kapanış olursa senaryo bozulur, ${fmt(res[1] ?? price + 3 * A)} test edilebilir.`;
   }
