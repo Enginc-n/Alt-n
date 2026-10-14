@@ -27,9 +27,10 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
 <header>
   <h1>🟡 Altın Analiz Ajanı</h1>
   <select id="tf">
-    <option value="15m">15 dk</option><option value="1h">1 saat</option>
+    <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h">1 saat</option>
     <option value="4h" selected>4 saat</option><option value="1d">Günlük</option>
   </select>
+  <select id="mode"><option value="normal">Normal mod</option><option value="scalp">⚡ Scalp (kısa vade)</option></select>
   <button id="refresh">Yenile</button>
   <span id="src" class="note"></span>
   <span id="live" class="note"></span>
@@ -39,7 +40,7 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
   <section>
     <div id="chart"></div>
     <div id="rsi"></div>
-    <p class="note">Mum: XAU/USD karşılığı (PAXG/USDT, 1 PAXG = 1 ons altın). Turuncu: EMA20, mavi: EMA50, mor: SMA200, gri: Bollinger. Oklar: geçmiş al/sat sinyalleri. Şeffaf mumlar: ajanın öngördüğü sanal mumlar (ana senaryo); kırmızı kesikli çizgi: alternatif senaryo.</p>
+    <p class="note">Mum: XAU/USD karşılığı (PAXG/USDT, 1 PAXG = 1 ons altın). Turuncu: EMA20 (scalp: EMA9), mavi: EMA50 (scalp: EMA21), mor: SMA200, gri: Bollinger. Oklar: geçmiş al/sat sinyalleri. Şeffaf mumlar: ajanın öngördüğü sanal mumlar (ana senaryo); kırmızı kesikli çizgi: alternatif senaryo.</p>
   </section>
   <aside>
     <div class="card"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
@@ -61,6 +62,7 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <div class="card"><h2>Yükseliş / düşüş için ne gerekir?</h2><ul id="need"></ul></div>
     <div class="card"><h2>Teknikler – neden artar, neden düşer?</h2>
       <details><summary><b>Trend (EMA20/50, SMA200)</b></summary><p class="note">Fiyat SMA200 üzerindeyse ana trend yukarıdır; kurumlar bu çizgiyi izler. EMA20'nin EMA50'yi yukarı kesmesi kısa vadeli alıcıların güçlendiğini gösterir. Golden Cross (EMA50 ↑ SMA200) uzun vadeli boğa, Death Cross ayı sinyalidir.</p></details>
+      <details><summary><b>⚡ Scalp modu (kısa vadeli kısa yükselişler)</b></summary><p class="note">1–5 dakikalık grafikte EMA9/EMA21 kesişimi ve son 3 mumun ivmesi kullanılır. Stop 1×ATR (dar), Hedef 1 = 1R, Hedef 2 = 2R: küçük ama sık kâr alınır. En iyi saatler Londra (10:00–13:00 TSİ) ve New York açılışı (15:30–18:00 TSİ); veri açıklamalarından 5 dk önce ve sonra işlem açmayın. Spread ve komisyon kısa işlemlerde kârın büyük kısmını yiyebilir – geriye dönük testteki sonuç bunları içermez.</p></details>
       <details><summary><b>RSI (Göreceli Güç)</b></summary><p class="note">0–100 arası ivme ölçer. 70 üstü aşırı alım (kâr satışı gelebilir), 30 altı aşırı satım (tepki alımı gelebilir). Fiyat yeni dip yaparken RSI yapmıyorsa (pozitif uyumsuzluk) düşüş gücünü kaybediyor demektir.</p></details>
       <details><summary><b>MACD</b></summary><p class="note">12 ve 26 dönemlik EMA farkı. Histogram sıfırı yukarı keserse momentum alıcılara, aşağı keserse satıcılara geçer.</p></details>
       <details><summary><b>Bollinger Bantları</b></summary><p class="note">Ortalama ±2 standart sapma. Bantlar daralınca (sıkışma) volatilite birikir ve genelde sert bir kırılım gelir. Bant dışı kapanışlar aşırı uzamayı gösterir.</p></details>
@@ -131,7 +133,8 @@ function levels(d, w = 5) {
 // ---------- Ajan ----------
 function analyze(d) {
   const c = d.map(k => k.close), L = c.length - 1, price = c[L];
-  const e20 = ema(c, 20), e50 = ema(c, 50), s200 = sma(c, 200), r = rsi(c), a = atr(d), bb = bollinger(c);
+  const SC = $('mode').value === 'scalp', nF = SC ? 9 : 20, nS = SC ? 21 : 50;
+  const e20 = ema(c, nF), e50 = ema(c, nS), s200 = sma(c, 200), r = rsi(c), a = atr(d), bb = bollinger(c);
   const e12 = ema(c, 12), e26 = ema(c, 26), macd = e12.map((x, i) => x - e26[i]), sig = ema(macd, 9), hist = macd.map((x, i) => x - sig[i]);
   const lv = levels(d);
   const sup = lv.filter(v => v < price).sort((x, y) => y - x), res = lv.filter(v => v > price).sort((x, y) => x - y);
@@ -139,7 +142,7 @@ function analyze(d) {
   let score = 0; const why = [];
   const add = (p, t) => { score += p; why.push((p > 0 ? '🟢 ' : p < 0 ? '🔴 ' : '⚪ ') + t); };
   if (s200[L]) add(price > s200[L] ? 2 : -2, `Fiyat SMA200 ${price > s200[L] ? 'üzerinde (ana trend yukarı)' : 'altında (ana trend aşağı)'}`);
-  add(e20[L] > e50[L] ? 1.5 : -1.5, `EMA20 ${e20[L] > e50[L] ? '>' : '<'} EMA50 (orta vade ${e20[L] > e50[L] ? 'yükseliş' : 'düşüş'})`);
+  add(e20[L] > e50[L] ? 1.5 : -1.5, `EMA${nF} ${e20[L] > e50[L] ? '>' : '<'} EMA${nS} (${SC ? 'kısa' : 'orta'} vade ${e20[L] > e50[L] ? 'yükseliş' : 'düşüş'})`);
   if (r[L] < 30) add(2, `RSI ${r[L].toFixed(1)} – aşırı satım, tepki alımı olası`);
   else if (r[L] > 70) add(-2, `RSI ${r[L].toFixed(1)} – aşırı alım, düzeltme riski`);
   else add(r[L] > 50 ? 0.5 : -0.5, `RSI ${r[L].toFixed(1)} – nötr bölge`);
@@ -150,10 +153,15 @@ function analyze(d) {
 
   const verdict = score >= 3 ? 'GÜÇLÜ AL' : score >= 1 ? 'AL' : score <= -3 ? 'GÜÇLÜ SAT' : score <= -1 ? 'SAT' : 'BEKLE';
   const long = score >= 0, A = a[L];
-  const stop = long ? Math.min(price - 1.5 * A, (sup[0] ?? price) - 0.3 * A) : Math.max(price + 1.5 * A, (res[0] ?? price) + 0.3 * A);
+  if (SC) {
+    const mom = c[L] - c[L - 3];
+    add(mom > 0.5 * a[L] ? 1 : mom < -0.5 * a[L] ? -1 : 0, `Son 3 mum momentumu ${mom > 0 ? '+' : ''}${fmt(mom)}$ (scalp ivmesi)`);
+  }
+  const stop = SC ? (long ? price - A : price + A) : long ? Math.min(price - 1.5 * A, (sup[0] ?? price) - 0.3 * A) : Math.max(price + 1.5 * A, (res[0] ?? price) + 0.3 * A);
   const risk = Math.abs(price - stop);
-  const tp1 = long ? (res[0] && res[0] - price > risk ? res[0] : price + 1.5 * risk) : (sup[0] && price - sup[0] > risk ? sup[0] : price - 1.5 * risk);
-  const tp2 = long ? price + 3 * risk : price - 3 * risk;
+  let tp1 = long ? (res[0] && res[0] - price > risk ? res[0] : price + 1.5 * risk) : (sup[0] && price - sup[0] > risk ? sup[0] : price - 1.5 * risk);
+  let tp2 = long ? price + 3 * risk : price - 3 * risk;
+  if (SC) { tp1 = long ? price + risk : price - risk; tp2 = long ? price + 2 * risk : price - 2 * risk; }
 
   // geçmiş sinyaller: EMA20/50 kesişimi + RSI filtresi
   const marks = [];
@@ -351,6 +359,7 @@ async function run() {
 // analiz ve sanal mumlar saniyede bir güncellenir, fiyat ise her işlemde anında
 setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); } }, 1000);
 ['bal', 'riskp', 'pipsize'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).oninput = () => { calc(); render(); }; });
+$('mode').onchange = () => { if ($('mode').value === 'scalp' && ['4h', '1d', '1h'].includes($('tf').value)) $('tf').value = '5m'; run(); };
 $('refresh').onclick = run; $('tf').onchange = run;
 run();
 </script>
