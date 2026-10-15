@@ -1,159 +1,66 @@
 //@version=6
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// Kripto Ajan PRO – Likidasyon Fitili (varsayılan, test edildi) & Akış-Rejim (deneysel)
+// Kripto Ajan PRO – Likidasyon Fitili  (Pine Script v6)
+// Ayar gerektirmez: test edilmiş değerler koda gömülüdür ve sağ üst panelde otomatik gösterilir.
 //
-// ÖNERİLEN GRAFİK: 1H (60 dk) · BTC / ETH / SOL USDT perpetual (ör. OKX:BTCUSDT.P, OKX:ETHUSDT.P,
-// OKX:SOLUSDT.P). Hacim verisi olmayan sembollerde fitil modu sinyal üretmez.
+// Önerilen grafik: 1 saat · BTC / ETH / SOL USDT perpetual (ör. BINANCE:BTCUSDT.P, OKX:ETHUSDT.P).
+// Gerçek veri testi (OKX USDT perpetual, BTC+ETH+SOL, %0,05 giriş + %0,05 çıkış komisyon, 1H):
+//   ilk %60: 47 işlem +6,6R · son %40 (görülmemiş dönem): 43 işlem +20,2R
 //
-// Gerçek veri testi (OKX USDT perpetual, BTC+ETH+SOL birlikte, %0,05 giriş + %0,05 çıkış komisyon):
-//   • Likidasyon Fitili, 1H → ilk %60: 47 işlem +6,6R · son %40: 43 işlem +20,2R  (VARSAYILAN)
-//   • Akış & Rejim, 15m/1H/4H → zararda (ör. 1H -17,7R / -9,8R)  → yalnızca "deneysel" mod
-//
-// Sinyal: test/kripto-ideas.mjs → 'Likidasyon-Fitili-Donus' entry() ile birebir (aynı eşikler,
-// geriye bakışlar, stop formülü ve komisyon koruması: stop mesafesi ≥ fiyatın %0,6'sı, TP1 1R, TP2 2R).
-// Pozisyon yönetimi: test/kripto-futures.mjs simIdea()/sim() ile birebir:
-//   giriş = onaylı sinyal mumunun KAPANIŞI · risk = stop(ATR katı) × ATR(14, Wilder)
-//   SL = giriş ∓ risk · TP1 = giriş ± tp1×risk (%50 kapat, SL girişe) · TP2 = giriş ± tp2×risk (kalanı kapat)
-//   yönetim bir SONRAKİ mumda başlar · aynı mumda SL ve hedef → önce SL sayılır
-//   ters sinyal → o mumun kapanışından kapat (aynı mumda yeni giriş yok) · tek pozisyon
-//   R: TP1 öncesi SL = -1 · TP1 + başabaş = 0,5×tp1 · TP1 + TP2 = 0,5×tp1 + 0,5×tp2
-//      ters kapanış = kalan kısım kapanışa göre değerlenir · komisyon (giriş+çıkış) R'den düşülür
-// Sinyaller yalnızca kapanmış (onaylı) mumlarda üretilir; repaint yok.
+// Sinyal: hacmi 20 mumluk ortalamanın ≥2,5 katı, boyu ≥1,8 ATR olan mum son 20 mumun dibini (tepesini)
+// süpürür, aralığının ≥%50'si alt (üst) fitil kalır ve mumun üst (alt) %40'ında kapanırsa ters yöne girilir.
+// Stop: fitil ucunun 0,25 ATR ötesi (en az 1 ATR ve en az fiyatın %0,6'sı) · TP1 = 1R (%50 kapat, SL girişe)
+// TP2 = 2R (kalanı kapat). Giriş = onaylı sinyal mumunun kapanışı; yönetim bir sonraki mumda başlar;
+// aynı mumda SL ve hedef → önce SL; ters sinyal → kapanıştan kapat; aynı anda tek pozisyon. Repaint yok.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 indicator("Kripto Ajan PRO – Likidasyon Fitili", shorttitle="KriptoAjan", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
 
-// ───────── GİRDİLER ─────────
-gM = "Mod"
-sigMode = input.string("Likidasyon Fitili (test edildi)", "Sinyal modu", options=["Likidasyon Fitili (test edildi)", "Akış & Rejim (deneysel)"], group=gM, tooltip="Likidasyon Fitili: gerçek perpetual verisinde örneklem dışı doğrulandı (1H). Akış & Rejim: testte zararda, yalnızca deneme amaçlı.")
-atrLen  = input.int(14, "ATR uzunluğu (Wilder)", minval=1, group=gM)
-feePct  = input.float(0.05, "Komisyon (tek yön, %)", minval=0.0, step=0.01, group=gM, tooltip="Test düzeneğindeki gibi giriş + çıkış ücreti her işlemin R sonucundan düşülür. 0 = brüt R.")
+// ───────── GÖMÜLÜ AYARLAR (gerçek veride test edilen değerler) ─────────
+ATR_LEN  = 14       // ATR (Wilder)
+VOL_LEN  = 20       // hacim ortalaması
+REL_MIN  = 2.5      // min göreli hacim (× ortalama)
+RNG_MIN  = 1.8      // min mum boyu (× önceki mumun ATR'si)
+WICK_MIN = 0.5      // min fitil / mum boyu
+POS_MIN  = 0.6      // kapanış, fitilin tersindeki %40'lık bölgede
+SWEEP    = 20       // süpürülen önceki mum sayısı
+BUF      = 0.25     // stop tamponu (× ATR, fitil ucunun ötesi)
+MIN_SL   = 1.0      // min stop (× ATR)
+MIN_RISK = 0.006    // min stop mesafesi (fiyatın %0,6'sı; komisyon koruması)
+TP1_R    = 1.0      // TP1 (R)
+TP2_R    = 2.0      // TP2 (R)
+FEE      = 0.0005   // komisyon, tek yön (%0,05)
+WARM     = 130      // ısınma (ilk mumlarda sinyal yok)
 
-gW = "Likidasyon Fitili (test edilen değerler)"
-wVolLen  = input.int(20, "Hacim SMA uzunluğu", minval=2, group=gW)
-wRelMin  = input.float(2.5, "Min göreli hacim (× SMA)", minval=0.1, step=0.1, group=gW)
-wRngMin  = input.float(1.8, "Min mum boyu (× önceki mumun ATR'si)", minval=0.1, step=0.1, group=gW)
-wWickMin = input.float(0.5, "Min fitil oranı (fitil / mum boyu)", minval=0.0, maxval=1.0, step=0.05, group=gW)
-wPosMin  = input.float(0.6, "Min kapanış konumu (fitilin tersinde)", minval=0.0, maxval=1.0, step=0.05, group=gW)
-wSweep   = input.int(20, "Süpürme: önceki mum sayısı", minval=1, group=gW)
-wBuf     = input.float(0.25, "Stop tamponu (× ATR, fitil ucunun ötesi)", minval=0.0, step=0.05, group=gW)
-wMinSl   = input.float(1.0, "Min stop (× ATR)", minval=0.1, step=0.1, group=gW)
-wMinRisk = input.float(0.006, "Min stop mesafesi (fiyatın oranı, 0.006 = %0,6)", minval=0.0, step=0.001, group=gW, tooltip="Komisyon koruması: stop mesafesi en az fiyatın bu oranı kadar olur (ücret ≤ ~0,17R).")
-wTp1     = input.float(1.0, "TP1 (R)", minval=0.1, step=0.1, group=gW)
-wTp2     = input.float(2.0, "TP2 (R)", minval=0.2, step=0.1, group=gW)
+// ───────── GÖSTERGELER (hepsi global kapsamda: v6'da her mumda hesaplanır) ─────────
+atr     = ta.atr(ATR_LEN)
+atrPrev = nz(atr[1])
+volSma  = ta.sma(nz(volume), VOL_LEN)
+prevLo  = ta.lowest(low, SWEEP)[1]
+prevHi  = ta.highest(high, SWEEP)[1]
+rng     = high - low
+rel     = volSma > 0 ? nz(volume) / volSma : 0.0
+lw      = rng > 0 ? (math.min(open, close) - low) / rng : 0.0     // alt fitil oranı
+uw      = rng > 0 ? (high - math.max(open, close)) / rng : 0.0    // üst fitil oranı
+posL    = rng > 0 ? (close - low) / rng : 0.0
+posS    = rng > 0 ? (high - close) / rng : 0.0
+rngAtr  = atrPrev > 0 ? rng / atrPrev : 0.0
 
-gS = "Akış & Rejim (deneysel) – Sinyal"
-emaLen   = input.int(34, "Momentum EMA uzunluğu", minval=2, group=gS)
-momSm    = input.int(5, "Momentum yumuşatma", minval=1, group=gS)
-flowLen  = input.int(20, "Hacim akış penceresi", minval=2, group=gS)
-scoreThr = input.int(55, "Skor eşiği (0-100)", minval=1, maxval=100, group=gS)
-
-gF = "Akış & Rejim (deneysel) – Filtreler"
-erLen    = input.int(20, "Verimlilik oranı (ER) uzunluğu", minval=2, group=gF)
-erMin    = input.float(0.30, "Min ER (trend rejimi)", minval=0.0, maxval=1.0, step=0.05, group=gF)
-useVol   = input.bool(true, "Göreli hacim filtresi", group=gF)
-volK     = input.float(1.2, "Hacim çarpanı (k × SMA)", minval=0.1, step=0.1, group=gF)
-useHtf   = input.bool(true, "Üst zaman dilimi filtresi", group=gF)
-htfTf    = input.timeframe("240", "Üst zaman dilimi (grafikten büyük olmalı)", group=gF, tooltip="Test: 15m ve 1H grafikte 4H, 4H grafikte 1D. Grafikten büyük değilse filtre otomatik kapanır.")
-htfLen   = input.int(50, "ÜZD EMA uzunluğu", minval=2, group=gF)
-
-gR = "Akış & Rejim (deneysel) – Risk"
-slMult   = input.float(1.5, "Stop ATR çarpanı", minval=0.1, step=0.1, group=gR)
-tp1R     = input.float(1.0, "TP1 (R)", minval=0.1, step=0.1, group=gR)
-tp2R     = input.float(2.5, "TP2 (R)", minval=0.2, step=0.1, group=gR)
-
-gG = "Görünüm"
-showTbl  = input.bool(true, "Sağ üst paneli göster", group=gG)
-
-isWick = sigMode == "Likidasyon Fitili (test edildi)"
-WARM_W = 130      // kripto-ideas.mjs WARM (i < 130 → sinyal yok)
-WARM_F = 60       // kripto-futures.mjs sim() döngü başlangıcı
-
-// ───────── ORTAK ─────────
-atr = ta.atr(atrLen)                 // Wilder RMA, JS rma(tr, 14) ile aynı
-rng = high - low
-
-// ═════════ A) LİKİDASYON FİTİLİ (kripto-ideas.mjs 'Likidasyon-Fitili-Donus') ═════════
-wVolSma = ta.sma(nz(volume), wVolLen)
-wRel    = wVolSma > 0 ? nz(volume) / wVolSma : 0.0                          // F.rel
-wLw     = rng > 0 ? (math.min(open, close) - low) / rng : 0.0               // alt fitil oranı
-wUw     = rng > 0 ? (high - math.max(open, close)) / rng : 0.0              // üst fitil oranı
-wPosL   = rng > 0 ? (close - low) / rng : 0.0                               // (c - l) / rng
-wPosS   = rng > 0 ? (high - close) / rng : 0.0                              // (h - c) / rng
-wRngAtr = atr[1] > 0 ? rng / atr[1] : 0.0
-// Süpürme: önceki wSweep mumun TAMAMININ dibi (tepesi) bu mumun dibinden (tepesinden) kesin büyük (küçük)
-wPrevLo = ta.lowest(low, wSweep)[1]
-wPrevHi = ta.highest(high, wSweep)[1]
-// if (i < WARM) · rel >= 2.5 · a > 0 · a1 > 0 · rng >= 1.8 × a1
-wBase   = bar_index >= WARM_W and wRel >= wRelMin and atr > 0 and atr[1] > 0 and rng >= wRngMin * atr[1]
-// dir = lw >= 0.5 && (c-l)/rng >= 0.6 ? 1 : uw >= 0.5 && (h-c)/rng >= 0.6 ? -1 : 0
-wDir    = not wBase ? 0 : (wLw >= wWickMin and wPosL >= wPosMin) ? 1 : (wUw >= wWickMin and wPosS >= wPosMin) ? -1 : 0
-wSwept  = wDir == 1 ? low < wPrevLo : wDir == -1 ? high > wPrevHi : false
-wLong   = wDir == 1 and wSwept
-wShort  = wDir == -1 and wSwept
-// sl = max(1, (dir × (c - tip) + 0.25 × a) / a) ; feeSafe: max(sl, 0.006 × c / a)
-wTip    = wDir == 1 ? low : high
-wSlRaw  = math.max(wMinSl, (wDir * (close - wTip) + wBuf * atr) / atr)
-wSlMult = math.max(wSlRaw, wMinRisk * close / atr)
-
-// ═════════ B) AKIŞ & REJİM (deneysel) ═════════
-// 1) Volatiliteye göre normalize momentum
-mom = ta.ema((close - ta.ema(close, emaLen)) / math.max(atr, syminfo.mintick), momSm)
-
-// 2) Hacim akış baskısı
-bodyFrac = rng > 0 ? (close - open) / rng : 0.0          // -1..+1 mum gövde oranı
-sVol     = nz(volume) * bodyFrac                          // işaretli hacim
-volSma   = ta.sma(nz(volume), flowLen)
-flow     = volSma > 0 ? math.sum(sVol, flowLen) / (volSma * flowLen) : 0.0   // yaklaşık -1..+1
-relVol   = volSma > 0 ? nz(volume) / volSma : 0.0
-volOk    = not useVol or relVol >= volK
-
-// 3) Kaufman Verimlilik Oranı (rejim)
-erNoise = math.sum(math.abs(close - nz(close[1], close)), erLen)
-er      = erNoise > 0 ? math.abs(close - nz(close[erLen], close)) / erNoise : 0.0
-trendOk = er >= erMin
-
-// 4) Üst zaman dilimi eğilimi – repaint yok: lookahead_on + [1],[2] (içinde bulunulan ÜZD mumundan
-//    önceki iki KAPANMIŞ mumun EMA'sı; JS hdir ile aynı). ÜZD grafikten büyük değilse filtre kapalı.
-htfSecOk = timeframe.in_seconds(htfTf) > timeframe.in_seconds(timeframe.period)
-htfReq   = htfSecOk ? htfTf : timeframe.period
-htfOn    = useHtf and htfSecOk
-htfFn() =>
-    e = ta.ema(close, htfLen)
-    [e[1], e[2]]
-[htfE1, htfE2] = request.security(syminfo.tickerid, htfReq, htfFn(), lookahead=barmerge.lookahead_on)
-htfDir  = na(htfE1) or na(htfE2) ? 0 : htfE1 > htfE2 ? 1 : htfE1 < htfE2 ? -1 : 0
-htfBull = not htfOn or htfDir == 1
-htfBear = not htfOn or htfDir == -1
-
-// 5) Bileşik skor (-100..+100) – ÜZD kapalıysa ÜZD katkısı 0
-clamp(x, lo, hi) => math.max(lo, math.min(hi, x))
-momPart  = clamp(mom / 2.0, -1.0, 1.0) * 40.0
-flowPart = clamp(flow * 2.5, -1.0, 1.0) * 30.0
-htfPart  = htfOn ? htfDir * 20.0 : 0.0
-erPart   = math.sign(mom) * er * 10.0
-score    = clamp(momPart + flowPart + htfPart + erPart, -100.0, 100.0)
-
-xUp       = ta.crossover(score, scoreThr)
-xDn       = ta.crossunder(score, -scoreThr)
-longCond  = xUp and bar_index >= WARM_F and trendOk and volOk and htfBull and flow > 0
-shortCond = xDn and bar_index >= WARM_F and trendOk and volOk and htfBear and flow < 0
-
-// ═════════ SEÇİLİ MODUN SİNYALİ ═════════
-longSig   = isWick ? wLong : longCond
-shortSig  = isWick ? wShort : shortCond
-sigSlMult = isWick ? wSlMult : slMult                       // stop (ATR katı)
-sigTp1    = isWick ? wTp1 : tp1R
-sigTp2    = math.max(isWick ? wTp2 : tp2R, sigTp1 + 0.1)    // TP2 her zaman TP1'in ötesinde
+// ───────── SİNYAL ─────────
+bool  base  = bar_index >= WARM and rel >= REL_MIN and atr > 0 and atrPrev > 0 and rng >= RNG_MIN * atrPrev
+int   dirW  = not base ? 0 : (lw >= WICK_MIN and posL >= POS_MIN) ? 1 : (uw >= WICK_MIN and posS >= POS_MIN) ? -1 : 0
+bool  swept = dirW == 1 ? (not na(prevLo) and low < prevLo) : dirW == -1 ? (not na(prevHi) and high > prevHi) : false
+bool  sigL  = dirW == 1 and swept
+bool  sigS  = dirW == -1 and swept
+float tip   = dirW == 1 ? low : high
+float slAtr = atr > 0 ? math.max(math.max(MIN_SL, (dirW * (close - tip) + BUF * atr) / atr), MIN_RISK * close / atr) : 0.0
 
 // ───────── POZİSYON DURUMU ─────────
-var int   pos      = 0        // 0 yok, 1 long, -1 short
+var int   pos      = 0
 var float entry    = na
 var float sl       = na
 var float tp1      = na
 var float tp2      = na
-var float risk     = na       // fiyat cinsinden 1R
-var float pTp1     = na       // girişte sabitlenen TP1 (R)
-var float pTp2     = na       // girişte sabitlenen TP2 (R)
+var float risk     = na
 var bool  tp1Hit   = false
 var int   entryBar = 0
 var line  lnE  = na
@@ -162,36 +69,31 @@ var line  lnT1 = na
 var line  lnT2 = na
 var box   bxW  = na
 var box   bxL  = na
-// İstatistikler
 var int   trades = 0
 var int   wins   = 0
 var float totR   = 0.0
 
-// Olay bayrakları (alertcondition için her mumda sıfırlanır) ve tek alert() metni
 bool   evLong  = false
 bool   evShort = false
 bool   evTp1   = false
 bool   evClose = false
 string aMsg    = ""
-fee = feePct / 100.0
-tk  = syminfo.ticker
+string tk      = syminfo.ticker
 
-// Çizgileri bu mumun sonuna kadar uzat; fin=true ise sağa uzatmayı kapat
-updDraw(line a, line b, line c, line d, box w, box l, bool fin) =>
+updDraw(bool fin) =>
     if fin
-        line.set_extend(a, extend.none)
-        line.set_extend(b, extend.none)
-        line.set_extend(c, extend.none)
-        line.set_extend(d, extend.none)
-    line.set_x2(a, bar_index)
-    line.set_x2(b, bar_index)
-    line.set_x2(c, bar_index)
-    line.set_x2(d, bar_index)
-    box.set_right(w, bar_index)
-    box.set_right(l, bar_index)
+        line.set_extend(lnE, extend.none)
+        line.set_extend(lnS, extend.none)
+        line.set_extend(lnT1, extend.none)
+        line.set_extend(lnT2, extend.none)
+    line.set_x2(lnE, bar_index)
+    line.set_x2(lnS, bar_index)
+    line.set_x2(lnT1, bar_index)
+    line.set_x2(lnT2, bar_index)
+    box.set_right(bxW, bar_index)
+    box.set_right(bxL, bar_index)
 
 if barstate.isconfirmed
-    // --- Açık pozisyonu yönet (giriş mumundan sonraki mumdan itibaren) ---
     if pos != 0 and bar_index > entryBar
         int    d0      = pos
         bool   doClose = false
@@ -203,7 +105,7 @@ if barstate.isconfirmed
         bool   hitT1   = pos == 1 ? high >= tp1 : low <= tp1
         bool   hitT2   = pos == 1 ? high >= tp2 : low <= tp2
         if not tp1Hit
-            if hitSL                       // aynı mumda SL ve hedef → önce SL (temkinli)
+            if hitSL
                 doClose := true
                 rRaw    := -1.0
                 exitPx  := sl
@@ -214,66 +116,60 @@ if barstate.isconfirmed
                 sl     := entry
                 line.set_y1(lnS, sl)
                 line.set_y2(lnS, sl)
-                box.set_top(bxL, math.max(entry, sl))      // kırmızı kutu: SL girişe → sıfır yükseklik
-                box.set_bottom(bxL, math.min(entry, sl))
+                box.set_top(bxL, entry)
+                box.set_bottom(bxL, entry)
                 if hitT2
                     doClose := true
-                    rRaw    := 0.5 * pTp1 + 0.5 * pTp2
+                    rRaw    := 0.5 * TP1_R + 0.5 * TP2_R
                     exitPx  := tp2
                     whyC    := "TP2"
         else
             if hitSL
                 doClose := true
-                rRaw    := 0.5 * pTp1
+                rRaw    := 0.5 * TP1_R
                 exitPx  := sl
                 whyC    := "Başabaş stop"
             else if hitT2
                 doClose := true
-                rRaw    := 0.5 * pTp1 + 0.5 * pTp2
+                rRaw    := 0.5 * TP1_R + 0.5 * TP2_R
                 exitPx  := tp2
                 whyC    := "TP2"
-        // Ters sinyal: kalan pozisyonu bu mumun kapanışından kapat
-        if not doClose and ((pos == 1 and shortSig) or (pos == -1 and longSig))
+        if not doClose and ((pos == 1 and sigS) or (pos == -1 and sigL))
             float remR = pos * (close - entry) / risk
-            rRaw    := tp1Hit ? 0.5 * pTp1 + 0.5 * remR : remR
+            rRaw    := tp1Hit ? 0.5 * TP1_R + 0.5 * remR : remR
             exitPx  := close
             doClose := true
             rev     := true
             whyC    := "Ters sinyal"
-        // Etiket + alarm: TP1 ve kapanış aynı mumdaysa tek etiket ve tek alert() içinde ikisi de;
-        // alertcondition tarafında evTp1 ve evClose ikisi de tetiklenir (eşitlik)
         string lTxt = ""
         if evTp1
             lTxt := "🎯 TP1 + SL GİRİŞE"
-            aMsg := "Kripto Ajan " + tk + " TP1 alındı (%50 kapat), SL girişe: " + str.tostring(entry, format.mintick)
+            aMsg := "Kripto Ajan " + tk + ": TP1 alındı (%50 kapat), SL girişe " + str.tostring(entry, format.mintick)
         if doClose
-            float  rNet = rRaw - 2.0 * fee * entry / risk
+            float  rNet = rRaw - 2.0 * FEE * entry / risk
             string rTxt = (rNet >= 0 ? "+" : "") + str.tostring(rNet, "0.00") + "R"
             evClose := true
             trades  += 1
             wins    += rNet > 0 ? 1 : 0
             totR    += rNet
             lTxt := (lTxt != "" ? lTxt + "\n" : "") + (rev ? "📤 POZİSYONU KAPAT" : "🏁 POZİSYON KAPAT") + "\n" + whyC + " (" + rTxt + ")"
-            aMsg := (aMsg != "" ? aMsg + " || " : "") + "Kripto Ajan " + tk + (rev ? " TERS SİNYAL – POZİSYONU KAPAT" : " POZİSYON KAPAT: " + whyC) + " | Fiyat " + str.tostring(exitPx, format.mintick) + " | " + rTxt
-            updDraw(lnE, lnS, lnT1, lnT2, bxW, bxL, true)
+            aMsg := (aMsg != "" ? aMsg + " || " : "") + "Kripto Ajan " + tk + (rev ? ": TERS SİNYAL – POZİSYONU KAPAT" : ": POZİSYON KAPAT – " + whyC) + " | " + str.tostring(exitPx, format.mintick) + " | " + rTxt
+            updDraw(true)
             pos    := 0
             tp1Hit := false
         else
-            updDraw(lnE, lnS, lnT1, lnT2, bxW, bxL, false)
+            updDraw(false)
         if lTxt != ""
             color lBg = rev ? color.orange : doClose ? color.gray : color.lime
             color lFg = doClose and not rev ? color.white : color.black
             label.new(bar_index, d0 == 1 ? high : low, lTxt, style=d0 == 1 ? label.style_label_down : label.style_label_up, color=color.new(lBg, 10), textcolor=lFg, size=size.small)
-    // --- Yeni sinyal (yalnızca pozisyon yokken; kapanış olan mumda yeni giriş yok) ---
-    else if pos == 0 and (longSig or shortSig) and sigSlMult * atr > 0
-        pos      := longSig ? 1 : -1
+    else if pos == 0 and (sigL or sigS) and slAtr * atr > 0
+        pos      := sigL ? 1 : -1
         entry    := close
-        risk     := sigSlMult * atr
+        risk     := slAtr * atr
         sl       := entry - pos * risk
-        tp1      := entry + pos * sigTp1 * risk
-        tp2      := entry + pos * sigTp2 * risk
-        pTp1     := sigTp1
-        pTp2     := sigTp2
+        tp1      := entry + pos * TP1_R * risk
+        tp2      := entry + pos * TP2_R * risk
         tp1Hit   := false
         entryBar := bar_index
         evLong   := pos == 1
@@ -284,55 +180,44 @@ if barstate.isconfirmed
         lnT2 := line.new(bar_index, tp2, bar_index + 1, tp2, color=color.rgb(0, 120, 40), width=2, extend=extend.right)
         bxW  := box.new(bar_index, math.max(entry, tp2), bar_index + 1, math.min(entry, tp2), border_color=color.new(color.green, 100), bgcolor=color.new(color.green, 85))
         bxL  := box.new(bar_index, math.max(entry, sl), bar_index + 1, math.min(entry, sl), border_color=color.new(color.red, 100), bgcolor=color.new(color.red, 85))
-        string sigTxt = isWick ? "Fitil: hacim " + str.tostring(wRel, "0.0") + "x, boy " + str.tostring(wRngAtr, "0.0") + " ATR, fitil %" + str.tostring(100.0 * (pos == 1 ? wLw : wUw), "0") : "Skor: " + str.tostring(score, "0")
-        string info = "Giriş: " + str.tostring(entry, format.mintick) + "\nSL: " + str.tostring(sl, format.mintick) + " (" + str.tostring(sigSlMult, "0.00") + " ATR)" + "\nTP1: " + str.tostring(tp1, format.mintick) + " (" + str.tostring(pTp1, "0.0") + "R)" + "\nTP2: " + str.tostring(tp2, format.mintick) + " (" + str.tostring(pTp2, "0.0") + "R)" + "\n" + sigTxt
+        string info = "Giriş: " + str.tostring(entry, format.mintick) + "\nSL: " + str.tostring(sl, format.mintick) + "\nTP1: " + str.tostring(tp1, format.mintick) + "\nTP2: " + str.tostring(tp2, format.mintick) + "\nHacim " + str.tostring(rel, "0.0") + "x · Boy " + str.tostring(rngAtr, "0.0") + " ATR · Fitil %" + str.tostring(100.0 * (pos == 1 ? lw : uw), "0")
         label.new(bar_index, pos == 1 ? low : high, pos == 1 ? "🟢 AL" : "🔴 SAT", style=pos == 1 ? label.style_label_up : label.style_label_down, color=pos == 1 ? color.green : color.red, textcolor=color.white, tooltip=info)
-        aMsg := "Kripto Ajan " + tk + (pos == 1 ? " AL" : " SAT") + " | " + str.replace_all(info, "\n", " | ")
+        aMsg := "Kripto Ajan " + tk + (pos == 1 ? ": AL" : ": SAT") + " | " + str.replace_all(info, "\n", " | ")
 
-// Tek alert() çağrısı: aynı mumdaki tüm olaylar tek mesajda
 if aMsg != ""
     alert(aMsg, alert.freq_once_per_bar_close)
 
-// ───────── ALARMLAR ─────────
-alertcondition(evLong, "AL", "Kripto Ajan {{ticker}}: AL sinyali ({{close}})")
-alertcondition(evShort, "SAT", "Kripto Ajan {{ticker}}: SAT sinyali ({{close}})")
-alertcondition(evTp1, "TP1 + SL girişe", "Kripto Ajan {{ticker}}: TP1 alındı (%50), SL girişe taşındı")
+alertcondition(evLong, "AL", "Kripto Ajan {{ticker}}: AL ({{close}})")
+alertcondition(evShort, "SAT", "Kripto Ajan {{ticker}}: SAT ({{close}})")
+alertcondition(evTp1, "TP1 + SL girişe", "Kripto Ajan {{ticker}}: TP1 alındı, SL girişe")
 alertcondition(evClose, "Pozisyon kapat", "Kripto Ajan {{ticker}}: POZİSYON KAPAT ({{close}})")
 
-// ───────── PANEL (sağ üst) ─────────
-var table tP = table.new(position.top_right, 2, 8, border_width=1, border_color=color.new(color.gray, 60))
-if barstate.islast and showTbl
+// ───────── PANEL (sağ üst, otomatik) ─────────
+var table tP = table.new(position.top_right, 2, 9, border_width=1, border_color=color.new(color.gray, 60))
+if barstate.islast
     color  hdrBg  = pos == 1 ? color.new(color.green, 15) : pos == -1 ? color.new(color.red, 15) : color.new(#2a1a8c, 0)
     string st     = pos == 0 ? "⏳ PUSUDA" : tp1Hit ? "🛡 BE " + (pos == 1 ? "LONG" : "SHORT") : pos == 1 ? "🟢 LONG" : "🔴 SHORT"
-    color  cellBg = color.new(#3a3f4b, 10)
+    color  cBg    = color.new(#3a3f4b, 10)
+    float  remP   = pos != 0 ? pos * (close - entry) / risk : 0.0
+    float  liveR  = pos != 0 ? (tp1Hit ? 0.5 * TP1_R + 0.5 * remP : remP) : 0.0
+    float  wr     = trades > 0 ? 100.0 * wins / trades : 0.0
+    bool   hot    = rel >= REL_MIN and rngAtr >= RNG_MIN
+    string tfNote = timeframe.period == "60" ? "1 saat ✓" : timeframe.period + " ⚠ test 1 saatte"
     table.cell(tP, 0, 0, "🤖 KRİPTO AJAN PRO", text_color=color.white, bgcolor=hdrBg, text_size=size.normal)
     table.cell(tP, 1, 0, st, text_color=color.white, bgcolor=color.new(color.gray, 30), text_size=size.normal)
-    table.cell(tP, 0, 1, "Giriş / Güncel SL:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 1, 1, pos != 0 ? str.tostring(entry, format.mintick) + " / " + str.tostring(sl, format.mintick) : "-", text_color=color.yellow, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 0, 2, "TP1 / TP2:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 1, 2, pos != 0 ? str.tostring(tp1, format.mintick) + (tp1Hit ? " ✓" : "") + " / " + str.tostring(tp2, format.mintick) : "-", text_color=color.lime, bgcolor=cellBg, text_size=size.small)
-    // Anlık R: şimdi kapatılsa (brüt) – TP1 alındıysa 0,5×TP1 + 0,5×kalan
-    float remP  = pos != 0 ? pos * (close - entry) / risk : 0.0
-    float liveR = pos != 0 ? (tp1Hit ? 0.5 * pTp1 + 0.5 * remP : remP) : 0.0
-    table.cell(tP, 0, 3, "Anlık R:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 1, 3, pos != 0 ? (liveR >= 0 ? "+" : "") + str.tostring(liveR, "0.00") + " R" : "-", text_color=pos == 0 ? color.gray : liveR >= 0 ? color.lime : color.red, bgcolor=cellBg, text_size=size.small)
-    if isWick
-        bool wHot = wRel >= wRelMin and wRngAtr >= wRngMin
-        table.cell(tP, 0, 4, "Hacim / Boy / Fitil:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-        table.cell(tP, 1, 4, str.tostring(wRel, "0.0") + "x / " + str.tostring(wRngAtr, "0.0") + " ATR / %" + str.tostring(100.0 * math.max(wLw, wUw), "0"), text_color=wHot ? color.yellow : color.silver, bgcolor=cellBg, text_size=size.small)
-    else
-        string htfTxt = not htfOn ? " · ÜZD kapalı" : htfDir == 1 ? " ↑" : htfDir == -1 ? " ↓" : " –"
-        table.cell(tP, 0, 4, "Skor / Rejim:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-        table.cell(tP, 1, 4, str.tostring(score, "0") + " / " + (trendOk ? "Trend" : "Yatay") + htfTxt, text_color=score > 0 ? color.lime : score < 0 ? color.red : color.gray, bgcolor=cellBg, text_size=size.small)
-    float wr = trades > 0 ? 100.0 * wins / trades : 0.0
-    table.cell(tP, 0, 5, "Başarı (Win Rate):", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 1, 5, "%" + str.tostring(wr, "0.0") + " (" + str.tostring(wins) + "W / " + str.tostring(trades - wins) + "L)", text_color=color.orange, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 0, 6, "Net Büyüme (R):", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 1, 6, (totR >= 0 ? "+" : "") + str.tostring(totR, "0.0") + " R", text_color=totR >= 0 ? color.lime : color.red, bgcolor=cellBg, text_size=size.small)
-    string modeTxt = isWick ? "Likidasyon Fitili" + (timeframe.period != "60" ? " ⚠ test: 1H" : "") : "Akış & Rejim (deneysel)"
-    table.cell(tP, 0, 7, "Mod:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
-    table.cell(tP, 1, 7, modeTxt, text_color=isWick ? color.aqua : color.orange, bgcolor=cellBg, text_size=size.small)
-
-plot(score, "Skor (Akış)", display=display.data_window)
-plot(wRel, "Göreli hacim (Fitil)", display=display.data_window)
-plot(totR, "Net R", display=display.data_window)
+    table.cell(tP, 0, 1, "Giriş / Güncel SL:", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 1, pos != 0 ? str.tostring(entry, format.mintick) + " / " + str.tostring(sl, format.mintick) : "-", text_color=color.yellow, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 0, 2, "TP1 / TP2:", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 2, pos != 0 ? str.tostring(tp1, format.mintick) + (tp1Hit ? " ✓" : "") + " / " + str.tostring(tp2, format.mintick) : "-", text_color=color.lime, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 0, 3, "Anlık R:", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 3, pos != 0 ? (liveR >= 0 ? "+" : "") + str.tostring(liveR, "0.00") + " R" : "-", text_color=pos == 0 ? color.gray : liveR >= 0 ? color.lime : color.red, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 0, 4, "Son mum (hacim/boy/fitil):", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 4, str.tostring(rel, "0.0") + "x / " + str.tostring(rngAtr, "0.0") + " ATR / %" + str.tostring(100.0 * math.max(lw, uw), "0"), text_color=hot ? color.yellow : color.silver, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 0, 5, "Başarı (Win Rate):", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 5, "%" + str.tostring(wr, "0.0") + " (" + str.tostring(wins) + "W / " + str.tostring(trades - wins) + "L)", text_color=color.orange, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 0, 6, "Net Büyüme (R):", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 6, (totR >= 0 ? "+" : "") + str.tostring(totR, "0.0") + " R", text_color=totR >= 0 ? color.lime : color.red, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 0, 7, "Ayarlar (gömülü):", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 7, "Hacim≥2.5x · Boy≥1.8ATR · Fitil≥%50 · Süpürme 20", text_color=color.aqua, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 0, 8, "Risk / Zaman:", text_color=color.white, bgcolor=cBg, text_size=size.small)
+    table.cell(tP, 1, 8, "TP1 1R · TP2 2R · Kom. %0,05 · " + tfNote, text_color=color.aqua, bgcolor=cBg, text_size=size.small)
