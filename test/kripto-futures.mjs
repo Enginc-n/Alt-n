@@ -83,7 +83,8 @@ const f = x => `${x.n} / %${x.win.toFixed(0)} / ${x.R >= 0 ? '+' : ''}${x.R.toFi
 let md = '## Kripto Ajan – perpetual futures testi (OKX, %0,05+%0,05 komisyon dahil)\n';
 const pooled = {};
 for (const inst of ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP']) for (const [bar, htf, n] of [['15m', '4H', 8000], ['1H', '4H', 6000], ['4H', '1D', 3000]]) {
-  const d = await okx(inst, bar, n), h = await okx(inst, htf, Math.ceil(n * SEC[bar] / SEC[htf]) + 120);
+  // OKX '1D' mumu Hong Kong saatine göre açılır; UTC hizası için '1Dutc' kullanılır
+  const d = await okx(inst, bar, n), h = await okx(inst, htf === '1D' ? '1Dutc' : htf, Math.ceil(n * SEC[bar] / SEC[htf]) + 120);
   if (d.length < 1000) { md += `\n${inst} ${bar}: veri yetersiz (${d.length})\n`; continue; }
   const F = features(d, h, {emaLen: 34, htf}), split = Math.floor(d.length * 0.6), days = ((d[d.length - 1].t - d[0].t) / 86400).toFixed(0);
   const grid = [];
