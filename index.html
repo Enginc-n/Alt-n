@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0f1115">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Altın Ajan">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon.svg">
@@ -15,7 +15,7 @@
 <style>
 :root{--bg:#0f1115;--panel:#181b22;--text:#e6e6e6;--muted:#8a90a0;--gold:#d4af37;--up:#26a69a;--down:#ef5350}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
-header{padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #262a33}
+header{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #262a33}
 h1{font-size:18px;margin:0 12px 0 0;color:var(--gold)}
 input{width:110px;text-align:right}input,select,button{background:var(--panel);color:var(--text);border:1px solid #333;border-radius:6px;padding:6px 10px}
 #price,#mprice{color:#ff4fa3}#price{font-weight:700;font-size:18px;margin-left:auto}
@@ -33,9 +33,9 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
 #actdetail table td{font-size:15px}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1115}}
 @media(max-width:700px){
-  header{padding:10px 16px;gap:6px}h1{font-size:16px;width:100%}#price{font-size:16px}
-  header select,header button{flex:1;padding:10px 6px;font-size:14px}
-  #src,#live{width:100%}
+  header{padding:calc(8px + env(safe-area-inset-top)) 16px 8px;gap:6px}h1{display:none}h1{font-size:16px;width:100%}#price{font-size:16px}
+  header select{flex:1;padding:10px 6px;font-size:14px;min-width:0}header button#refresh{flex:0 0 auto;padding:10px 12px}
+  #src{display:none}#live{font-size:11px}
   main{padding:8px 16px 90px}
   #chart{height:340px}#rsi{height:90px}
   input,select,button{font-size:16px;min-height:40px}
@@ -54,8 +54,8 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h" selected>1 saat</option>
     <option value="4h">4 saat</option><option value="1d">Günlük</option>
   </select>
-  <select id="mode"><option value="dengeli" selected>📈 Dengeli (1 saat) – önerilen</option><option value="normal">Normal mod</option><option value="scalp">⚡ Scalp (kısa vade)</option><option value="isabet">🎯 Yüksek isabet (1 saat)</option></select>
-  <button id="refresh">Yenile</button>
+  <select id="mode"><option value="dengeli" selected>📈 Dengeli ★</option><option value="isabet">🎯 Yüksek isabet</option><option value="normal">Normal</option><option value="scalp">⚡ Scalp</option></select>
+  <button id="refresh" title="Yenile" aria-label="Yenile">⟳</button>
   <span id="src" class="note"></span>
   <span id="live" class="note"></span>
   <span id="price">—</span>
