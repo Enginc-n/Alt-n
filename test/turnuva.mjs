@@ -6,21 +6,21 @@ import {appendFileSync, readdirSync, readFileSync} from 'fs';
 
 const N = {'5m': 6000, '15m': 6000, '1h': 4000, '4h': 2000, '1d': 1000};
 const cache = {};
-async function hist(tf) {
-  if (cache[tf]) return cache[tf];
+async function hist(tf, sym = 'PAXGUSDT') {
+  const key = sym + tf; if (cache[key]) return cache[key];
   let out = [], end = Date.now();
   while (out.length < (N[tf] || 1000)) {
-    const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=PAXGUSDT&interval=${tf}&limit=1000&endTime=${end}`);
+    const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}&interval=${tf}&limit=1000&endTime=${end}`);
     const k = await r.json(); if (!Array.isArray(k) || !k.length) break;
     out = k.concat(out); end = k[0][0] - 1;
   }
-  return (cache[tf] = out.slice(-(N[tf] || 1000)));
+  return (cache[key] = out.slice(-(N[tf] || 1000)));
 }
 const ideaSrc = readdirSync('ideas').filter(f => f.endsWith('.js')).map(f => readFileSync('ideas/' + f, 'utf8')).join('\n');
 
 process.on('unhandledRejection', e => console.log('YAKALANMAMIŞ', e?.message));
 const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
-const rows = [];
+const rows = [], aiRes = [];
 for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) {
   if (mode === 'dengeli' && tf !== '1h') continue;
   const p = await b.newPage();
@@ -33,7 +33,8 @@ for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) 
   await p.goto('file://' + process.cwd() + '/index.html');
   await p.waitForFunction(() => document.getElementById('verdict').textContent !== '…', null, {timeout: 300000});
   if (mode === 'normal') await p.addScriptTag({content: 'window.IDEAS = [];\n' + ideaSrc});
-  const res = await p.evaluate(async ([m, t]) => {
+  const eurK = (await hist(tf, 'EURUSDT')).map(k => ({time: k[0] / 1000, close: +k[4]}));
+  const res = await p.evaluate(async ([m, t, eur]) => {
     $('mode').value = m; $('tf').value = t; await run();
     const d = data, cost = 0.3, mid = Math.floor((250 + d.length) / 2);
     const ideas = m === 'normal' ? IDEAS : [{name: 'mevcut_dengeli', entry: (d, i, A) => entryCheck(A).ok ? {dir: A.long ? 1 : -1, sl: 3, tp: 1.5, max: 48} : null}];
@@ -54,14 +55,29 @@ for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) 
             if (sig.dir > 0 ? k.high >= tp : k.low <= tp) { r = sig.tp; break; }
           }
           if (r == null) { if (j >= d.length) return; r = (d[j - 1].close - e) * sig.dir / risk; }
-          s.tr.push({i, R: r - cost / risk}); s.open = {until: j};
+          s.tr.push({i, R: r - cost / risk, dir: sig.dir}); s.open = {until: j};
         } catch (err) { s.err = String(err); }
       });
     }
     const sum = tr => { const n = tr.length, w = tr.filter(t => t.R > 0).length, R = tr.reduce((a, t) => a + t.R, 0); let pk = 0, eq = 0, dd = 0; for (const t of tr) { eq += t.R; pk = Math.max(pk, eq); dd = Math.max(dd, pk - eq); } return {n, win: n ? w / n * 100 : 0, R, exp: n ? R / n : 0, dd}; };
-    return {days: ((d[d.length - 1].time - d[250].time) / 86400).toFixed(0), out: ideas.map((idea, n) => ({name: idea.name, desc: idea.desc || '', err: st[n].err,
+    // Yapay zeka filtresi: ilk %60 ile eğit, yalnızca son %40'taki işlemlerde dene
+    const split = Math.floor(250 + (d.length - 251) * 0.6), P = AI.prep(d, eur), M = AI.fit(P, d, 250, split);
+    let ai = null;
+    if (M) {
+      let n = 0, hit = 0, bw = 0, bl = 0, nw = 0, nl = 0;
+      for (let i = split; i < d.length - 26; i += 3) for (const dir of [1, -1]) {
+        const pr = AI.prob(M, AI.feat(P, d, i, dir)), y = AI.label(d, i, dir, P.a[i]);
+        n++; if ((pr >= 0.5) === (y === 1)) hit++; if (y) { bw += pr; nw++; } else { bl += pr; nl++; }
+      }
+      ai = {base: M.base, acc: hit / n, pw: bw / (nw || 1), pl: bl / (nl || 1), ideas: ideas.map((idea, k) => {
+        const oos = st[k].tr.filter(t => t.i >= split).map(t => ({...t, p: AI.prob(M, AI.feat(P, d, t.i, t.dir))}));
+        return {name: idea.name, rows: [0, M.base, M.base + 0.05, M.base + 0.1].map(th => ({th, ...sum(oos.filter(t => t.p >= th))}))};
+      })};
+    }
+    return {ai, days: ((d[d.length - 1].time - d[250].time) / 86400).toFixed(0), out: ideas.map((idea, n) => ({name: idea.name, desc: idea.desc || '', err: st[n].err,
       all: sum(st[n].tr), h1: sum(st[n].tr.filter(t => t.i < mid)), h2: sum(st[n].tr.filter(t => t.i >= mid))}))};
-  }, [mode, tf]);
+  }, [mode, tf, eurK]);
+  if (res.ai) aiRes.push({tf, mode, ...res.ai});
   for (const o of res.out) rows.push({tf, days: res.days, ...o});
   await p.close();
 }
@@ -71,5 +87,10 @@ rows.sort((a, b) => (b.all.n >= 20) - (a.all.n >= 20) || b.all.exp - a.all.exp);
 let md = '## Fikir turnuvası (gerçek PAXG, 0,30$ maliyet dahil)\n\n| Sıra | Fikir | Zaman | Gün | İşlem / Kazanma / Toplam | R/işlem | Maks. düşüş | 1. yarı | 2. yarı |\n|---|---|---|---|---|---|---|---|---|\n';
 rows.forEach((r, k) => { md += `| ${k + 1} | ${r.name}${r.err ? ' ⚠️' + r.err.slice(0, 60) : ''} | ${r.tf} | ${r.days} | ${f(r.all)} | ${r.all.exp.toFixed(3)} | ${r.all.dd.toFixed(1)}R | ${f(r.h1)} | ${f(r.h2)} |\n`; });
 md += '\n' + [...new Set(rows.map(r => `- **${r.name}**: ${r.desc}`))].join('\n') + '\n';
+md += '\n## Yapay zeka filtresi (eğitim: ilk %60, test: son %40)\n';
+for (const a of aiRes) {
+  md += `\n### ${a.tf} ${a.mode}: test isabeti %${(a.acc * 100).toFixed(1)} (temel oran %${(a.base * 100).toFixed(1)}), kazananlara ort. skor %${(a.pw * 100).toFixed(1)}, kaybedenlere %${(a.pl * 100).toFixed(1)}\n\n| Strateji | Filtresiz | Skor ≥ temel oran | ≥ temel +5 puan | ≥ temel +10 puan |\n|---|---|---|---|---|\n`;
+  for (const it of a.ideas) md += `| ${it.name} | ` + it.rows.map(r => `${r.n} / %${r.win.toFixed(0)} / ${r.R >= 0 ? '+' : ''}${r.R.toFixed(1)}R`).join(' | ') + ' |\n';
+}
 console.log(md);
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
