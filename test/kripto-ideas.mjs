@@ -64,7 +64,7 @@ export const IDEAS = [
   {
     // 2) Volatilite / kırılım uzmanı: iki ölçekli sıkışma (dar kutu + düşük ATR yüzdeliği) sonrası hacimli kırılım
     name: 'Sikisma-Kirilimi',
-    desc: "Son 12 mumun aralığı 3 ATR'nin altına sıkışmış ve ATR/fiyat oranı son 120 mumun en düşük %30'unda iken, kutunun dışında mumun uç %30'unda kapanan ve hacmi 20 mumluk ortalamanın 1,5 katını aşan mumla, üst zaman dilimi trendine ters olmamak kaydıyla kırılım yönünde girer.",
+    desc: "Son 12 mumun aralığı 3,5 ATR'nin altına sıkışmış ve ATR/fiyat oranı son 120 mumun en düşük %40'ında iken, kutunun dışında mumun uç %30'unda kapanan ve hacmi 20 mumluk ortalamanın 1,5 katını aşan mumla, üst zaman dilimi trendine ters olmamak kaydıyla kırılım yönünde girer.",
     entry(d, i, F) {
       if (i < WARM) return null;
       if (!(F.rel[i] >= 1.5)) return null;
@@ -72,7 +72,7 @@ export const IDEAS = [
       if (!(a > 0) || !(a1 > 0) || !(rng > 0)) return null;
       let H = -Infinity, L = Infinity;
       for (let j = i - 12; j < i; j++) { if (d[j].h > H) H = d[j].h; if (d[j].l < L) L = d[j].l; }
-      if (H - L > 3 * a1) return null;                         // dar kutu
+      if (H - L > 3.5 * a1) return null;                       // dar kutu
       const dir = k.c > H + 0.1 * a1 ? 1 : k.c < L - 0.1 * a1 ? -1 : 0;
       if (!dir) return null;
       const pos = (k.c - k.l) / rng;
@@ -80,7 +80,7 @@ export const IDEAS = [
       if (F.hdir[i] === -dir) return null;                     // üst zaman dilimine karşı kırılım alma
       const x = a1 / d[i - 1].c; let below = 0;                // ATR/fiyat yüzdeliği (önceki mumda, 120 mum)
       for (let j = i - 120; j < i; j++) if (F.atr[j] / d[j].c < x) below++;
-      if (below > 36) return null;
+      if (below > 48) return null;
       const mid = (H + L) / 2;                                 // stop kutunun ortasında
       const sl = clamp(dir * (k.c - mid) / a, 1.2, 3);
       return {dir, sl: feeSafe(sl, k.c, a), tp1: 1, tp2: 3};
@@ -89,7 +89,7 @@ export const IDEAS = [
   {
     // 3) Ortalamaya dönüş / likidasyon fitili uzmanı: hacim zirvesiyle likidite süpürüp geri dönen mum
     name: 'Likidasyon-Fitili-Donus',
-    desc: "Hacmi 20 mumluk ortalamanın 2,5 katı, boyu 1,8 ATR'den uzun olan, son 30 mumun dibini (tepesini) süpürüp aralığının en az yarısı alt (üst) fitil kalacak şekilde mumun üst (alt) %40'ında kapanan likidasyon mumunda ters yöne girer ve stopu fitil ucunun 0,25 ATR ötesine koyar.",
+    desc: "Hacmi 20 mumluk ortalamanın 2,5 katı, boyu 1,8 ATR'den uzun olan, son 20 mumun dibini (tepesini) süpürüp aralığının en az yarısı alt (üst) fitil kalacak şekilde mumun üst (alt) %40'ında kapanan likidasyon mumunda ters yöne girer ve stopu fitil ucunun 0,25 ATR ötesine koyar.",
     entry(d, i, F) {
       if (i < WARM) return null;
       if (!(F.rel[i] >= 2.5)) return null;                     // hacim zirvesi
@@ -98,7 +98,7 @@ export const IDEAS = [
       const lw = (Math.min(k.o, k.c) - k.l) / rng, uw = (k.h - Math.max(k.o, k.c)) / rng;
       const dir = lw >= 0.5 && (k.c - k.l) / rng >= 0.6 ? 1 : uw >= 0.5 && (k.h - k.c) / rng >= 0.6 ? -1 : 0;
       if (!dir) return null;
-      for (let j = i - 30; j < i; j++) if (dir > 0 ? d[j].l <= k.l : d[j].h >= k.h) return null; // süpürme şartı
+      for (let j = i - 20; j < i; j++) if (dir > 0 ? d[j].l <= k.l : d[j].h >= k.h) return null; // süpürme şartı
       const tip = dir > 0 ? k.l : k.h;
       const sl = Math.max(1, (dir * (k.c - tip) + 0.25 * a) / a);
       return {dir, sl: feeSafe(sl, k.c, a), tp1: 1, tp2: 2};

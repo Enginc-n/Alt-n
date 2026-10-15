@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['test/kripto-futures.mjs']
+    paths: ['test/kripto-futures.mjs', 'test/kripto-ideas.mjs']
 jobs:
   test:
     runs-on: ubuntu-latest

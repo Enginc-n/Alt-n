@@ -1,6 +1,7 @@
 // Kripto Ajan (pine/kripto_ajan.pine) mantığının birebir JS kopyası ile gerçek perpetual futures (OKX) verisinde test.
 // Maliyet: futures taker %0,05 giriş + %0,05 çıkış. Seçim ilk %60 (örneklem içi), doğrulama son %40 (örneklem dışı).
 import {appendFileSync} from 'fs';
+import {IDEAS} from './kripto-ideas.mjs';
 
 const SEC = {'15m': 900, '1H': 3600, '4H': 14400, '1D': 86400};
 async function okx(inst, bar, n) {
@@ -55,6 +56,28 @@ function sim(d, F, p, from, to) {
   return {n, win: n ? w / n * 100 : 0, R, exp: n ? R / n : 0, dd};
 }
 
+// Uzman ajan fikirleri: giriş ve stop/hedef fikrin kendisinden; yönetim (TP1 yarı + başabaş, TP2, ters sinyalde kapat) aynı
+function simIdea(d, F, idea, from, to) {
+  const fee = 0.0005; let pos = 0, e, sl, t1, t2, risk, hit1, eb, p; const tr = [];
+  for (let i = Math.max(130, from); i < to; i++) {
+    const k = d[i]; let sig = null; try { sig = idea.entry(d, i, F); } catch {}
+    if (pos && i > eb) {
+      let r = null;
+      const hSL = pos > 0 ? k.l <= sl : k.h >= sl, h1 = pos > 0 ? k.h >= t1 : k.l <= t1, h2 = pos > 0 ? k.h >= t2 : k.l <= t2;
+      if (!hit1) { if (hSL) r = -1; else if (h1) { hit1 = true; sl = e; if (h2) r = 0.5 * p.tp1 + 0.5 * p.tp2; } }
+      else { if (hSL) r = 0.5 * p.tp1; else if (h2) r = 0.5 * p.tp1 + 0.5 * p.tp2; }
+      if (r == null && sig && sig.dir === -pos) { const rem = pos * (k.c - e) / risk; r = hit1 ? 0.5 * p.tp1 + 0.5 * rem : rem; }
+      if (r != null) { tr.push({i, R: r - 2 * fee * e / risk}); pos = 0; }
+      continue;
+    }
+    if (!pos && sig && sig.dir) { p = sig; pos = sig.dir; e = k.c; risk = sig.sl * F.atr[i]; sl = e - pos * risk; t1 = e + pos * sig.tp1 * risk; t2 = e + pos * sig.tp2 * risk; hit1 = false; eb = i; }
+  }
+  const n = tr.length, w = tr.filter(t => t.R > 0).length, R = tr.reduce((a, t) => a + t.R, 0);
+  let pk = 0, eq = 0, dd = 0; for (const t of tr) { eq += t.R; pk = Math.max(pk, eq); dd = Math.max(dd, pk - eq); }
+  return {n, win: n ? w / n * 100 : 0, R, exp: n ? R / n : 0, dd};
+}
+const ideaTot = {};
+
 const DEF = {thr: 55, er: 0.3, vol: true, sl: 1.5, tp1: 1, tp2: 2.5};
 const f = x => `${x.n} / %${x.win.toFixed(0)} / ${x.R >= 0 ? '+' : ''}${x.R.toFixed(1)}R (${x.exp.toFixed(2)})`;
 let md = '## Kripto Ajan – perpetual futures testi (OKX, %0,05+%0,05 komisyon dahil)\n';
@@ -75,6 +98,11 @@ for (const inst of ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP']) for (con
   md += `\n### ${inst} ${bar} (${days} gün)\nVarsayılan: seçim ${f(def.is)} · doğrulama ${f(def.oos)}\n`;
   if (best) md += `En iyi (seçim dönemine göre) ${JSON.stringify(best.p)}: seçim ${f(best.is)} · doğrulama ${f(best.oos)}\n`;
   md += `Her iki dönemde kârlı kombinasyon: ${posBoth}/${grid.length}\n`;
+  for (const idea of IDEAS) {
+    const a = simIdea(d, F, idea, 0, split), b = simIdea(d, F, idea, split, d.length);
+    md += `- Fikir **${idea.name}**: ilk %60 ${f(a)} · son %40 ${f(b)}\n`;
+    const T = (ideaTot[idea.name + ' ' + bar] ??= {n1: 0, r1: 0, n2: 0, r2: 0}); T.n1 += a.n; T.r1 += a.R; T.n2 += b.n; T.r2 += b.R;
+  }
   console.log(inst, bar, 'tamam');
 }
 md += '\n## Tüm coinler birlikte (aynı ayar her coinde) – seçim dönemine göre en iyi 5 ayar\n';
@@ -85,5 +113,7 @@ for (const [bar, arr] of Object.entries(pooled)) {
   const dd = arr.find(x => JSON.stringify(x.p) === JSON.stringify(DEF));
   md += `| varsayılan | ${dd.nis} / ${dd.is.toFixed(1)}R | ${dd.noos} / ${dd.oos.toFixed(1)}R |\n`;
 }
+md += '\n## Uzman fikirleri – tüm coinler toplamı (ayar yok, veriye bakmadan yazıldı)\n| Fikir / zaman | İlk %60 (işlem / R) | Son %40 (işlem / R) |\n|---|---|---|\n';
+for (const [k, T] of Object.entries(ideaTot)) md += `| ${k} | ${T.n1} / ${T.r1.toFixed(1)}R | ${T.n2} / ${T.r2.toFixed(1)}R |\n`;
 console.log(md);
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
