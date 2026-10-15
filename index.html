@@ -123,26 +123,14 @@ function htfTrendAt(t) {
   for (let j = htf.length - 1; j >= 0; j--) if (htf[j].close <= t) return htf[j].trend;
   return 0;
 }
+// Yalnızca canlı veri: bağlantı yoksa demo göstermek yerine birkaç saniyede bir yeniden denenir
 async function loadData(tf) {
-  try {
-    // Binance bazı ülkelerde engelli; yedek olarak herkese açık veri sunucusu denenir
-    let r = null;
-    for (const h of ['https://api.binance.com', 'https://data-api.binance.vision']) {
-      try { r = await fetch(`${h}/api/v3/klines?symbol=PAXGUSDT&interval=${tf}&limit=500`); if (r.ok) break; } catch {}
-      r = null;
-    }
-    if (!r) throw 0;
-    const d = await r.json();
-    $('src').textContent = 'Canlı veri: Binance PAXG/USDT';
-    return d.map(k => ({time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4]}));
-  } catch {
-    $('src').textContent = '⚠️ Canlı veri alınamadı – demo veri gösteriliyor';
-    const out = []; let p = 2650, t = Math.floor(Date.now() / 1000) - 500 * 14400;
-    for (let i = 0; i < 500; i++, t += 14400) {
-      const o = p; p *= 1 + (Math.random() - 0.48) * 0.012;
-      out.push({time: t, open: o, close: p, high: Math.max(o, p) * (1 + Math.random() * 0.004), low: Math.min(o, p) * (1 - Math.random() * 0.004)});
-    }
-    return out;
+  for (let n = 1; ; n++) {
+    const d = await fetchKlines(tf);
+    if (d && d.length) { $('src').textContent = 'Canlı veri: Binance PAXG/USDT'; return d; }
+    $('src').textContent = `⏳ Canlı veriye bağlanılıyor… (deneme ${n})`;
+    $('live').textContent = n >= 3 ? '🔴 Binance\'e ulaşılamıyor – internetinizi veya VPN/engel durumunu kontrol edin' : '';
+    await new Promise(r => setTimeout(r, Math.min(15000, 2000 * n)));
   }
 }
 
@@ -445,9 +433,9 @@ function connect(tf) {
 async function run() {
   const tf = $('tf').value;
   data = await loadData(tf);
-  htf = !$('src').textContent.startsWith('⚠️') && HTF[tf] ? buildHtf(await fetchKlines(HTF[tf]), HTF[tf]) : [];
+  htf = HTF[tf] ? buildHtf(await fetchKlines(HTF[tf]), HTF[tf]) : [];
   showBacktest(backtest(data), backtest(data, false)); render();
-  if (!$('src').textContent.startsWith('⚠️')) connect(tf);
+  connect(tf);
 }
 // analiz ve sanal mumlar saniyede bir güncellenir, fiyat ise her işlemde anında
 setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); } }, 1000);
