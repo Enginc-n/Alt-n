@@ -130,7 +130,7 @@ b{font-weight:600;color:var(--text)}
       <div id="openSig"></div>
       <div id="scanStat" class="note"></div>
       <table id="sigHist"></table>
-      <p class="note">5 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🐢 Kaplumbağa (1s), 🔄 Ortalamaya dönüş (15dk), 📐 Elder üçlü ekran (15dk) – birlikte günde ortalama ~6 sinyal (geçmiş veriye göre). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı yönde birden fazla sinyal açık olabilir; ters yönde sinyal gelirse önce "📤 POZİSYONU KAPAT" uyarısı verilir.<br><span id="ver">Sürüm: 15.10 – yön değişimi</span></p></div>
+      <p class="note">5 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🐢 Kaplumbağa (1s), 🔄 Ortalamaya dönüş (15dk), 📐 Elder üçlü ekran (15dk) – birlikte günde ortalama ~6 sinyal (geçmiş veriye göre). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı yönde birden fazla sinyal açık olabilir; ters yönde sinyal gelirse önce "📤 POZİSYONU KAPAT" uyarısı verilir.<br><span id="ver">Sürüm: 15.10 – AI skoru</span></p></div>
     <div class="card adv" id="actcard"><h2>Şimdi ne yapmalı?</h2><div id="action" class="big">…</div><div id="actdetail"></div><p id="actnote" class="note"></p><p id="modeinfo" class="note" style="border-top:1px solid #2a2f3a;padding-top:6px"></p></div>
     <div class="card adv"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
     <div class="card adv"><h2>İşlem planı</h2><table id="plan"></table></div>
@@ -736,8 +736,43 @@ const STRATS = [{mode: 'seans', tf: '1h', ad: '🌅 Seans kırılımı'}, {mode:
 let sigs = []; try { sigs = JSON.parse(localStorage.getItem('altin_sigs') || '[]'); } catch {}
 const sigSave = () => { try { localStorage.setItem('altin_sigs', JSON.stringify(sigs.slice(-100))); } catch {} };
 let lastScan = null, scanBusy = false, lastSigHtml = '';
+// Haber filtresi: ABD tarım dışı istihdam (NFP) – her ayın ilk cuması 15:30 TSİ. 15:00–16:30 arası yeni sinyal verilmez.
+function newsFreeze(t = new Date()) {
+  const d = t.getUTCDate(), wd = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
+  return wd === 5 && d <= 7 && m >= 12 * 60 && m < 13 * 60 + 30 ? 'ABD tarım dışı istihdam verisi (NFP) – 16:30 TSİ\'ye kadar yeni sinyal yok' : null;
+}
+// ---- Yapay zeka modeli: her zaman dilimi için saatte bir, ~3000 mumluk geçmişle eğitilir ----
+async function fetchHist(tf, sym, n = 3000) {
+  for (const h of ['https://api.binance.com', 'https://data-api.binance.vision']) {
+    try {
+      let out = [], end = Date.now();
+      while (out.length < n) {
+        const k = await getJSON(`${h}/api/v3/klines?symbol=${sym}&interval=${tf}&limit=1000&endTime=${end}`, 9000);
+        if (!Array.isArray(k) || !k.length) break;
+        out = k.concat(out); end = k[0][0] - 1;
+      }
+      if (out.length > 300) return out.slice(-n).map(k => ({time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4]}));
+    } catch {}
+  }
+  return null;
+}
+const aiCache = {};
+async function aiModel(tf) {
+  const c = aiCache[tf]; if (c && Date.now() - c.t < 3600e3) return c;
+  let M = null, eur = null;
+  try {
+    const d = await fetchHist(tf, 'PAXGUSDT'); eur = await fetchHist(tf, 'EURUSDT');
+    if (d) M = AI.fit(AI.prep(d, eur), d, 210, d.length, 24, 2);
+  } catch (e) { console.warn('AI', e); }
+  return (aiCache[tf] = {t: Date.now(), M, eur});
+}
+function aiScore(mc, d, dir) {
+  if (!mc || !mc.M) return null;
+  try { const P = AI.prep(d, mc.eur), i = d.length - 2; return AI.prob(mc.M, AI.feat(P, d, i, dir)); } catch { return null; }
+}
 async function scanOnce() {
   if (scanBusy) return; scanBusy = true;
+  if (newsFreeze()) { scanBusy = false; lastScan = new Date(); renderSigs(); return; }
   try {
     const cache = {};
     const get = async tf => cache[tf] ||= await fetchKlines(tf);
@@ -755,6 +790,7 @@ async function scanOnce() {
       const maxBars = (P.sig && P.sig.max) || (PRESETS[st.mode] && PRESETS[st.mode].max) || 48;
       const x = {id: st.mode + bar.time, mode: st.mode, ad: st.ad, tf: st.tf, bar: bar.time, long: P.long, entry: e, stop: e - sg * dS, tp: e + sg * dT,
         dS, dT, until: bar.time + maxBars * TF_SEC[st.tf], res: null};
+      const mc = await aiModel(st.tf); x.ai = aiScore(mc, d, sg); x.aiBase = mc && mc.M ? mc.M.base : null;
       // Ters yönde açık pozisyon varsa: önce "elindekini kapat" uyarısı, yeni sinyal pozisyon kapanınca açılır
       const opp = sigs.filter(o => o.res == null && o.long !== P.long);
       if (opp.length) {
@@ -816,13 +852,13 @@ function renderSigs() {
       <p style="margin:4px 0">${x.exit.ad} ters yönde sinyal verdi. Bu ${x.long ? 'alımı' : 'satışı'} şimdi kapatın (şu an ${r >= 0 ? '+' : ''}${r.toFixed(2)}R).${pendRev ? ` Kapattıktan sonra <b>${pendRev.long ? 'ALIM' : 'SATIM'}</b> sinyali açılacak.` : ''}</p>
       <button class="closebtn" data-id="${x.id}">✅ Kapattım</button></div>` : '';
     return `<div class="sigbox ${x.long ? 'L' : 'S'}">${ex}<div class="sigtitle ${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} – AÇIK${x.rev ? ' (yön değişimi)' : ''}</div>
-      <table>${row('Strateji', `${x.ad} (${x.tf})`)}${row('Giriş', fmt(x.entry))}${row('Zarar-durdur', `<b class="sell">${fmt(x.stop)}</b>`)}${row('Hedef', `<b class="buy">${fmt(x.tp)}</b>`)}${row('Lot', lotOf(x))}
+      <table>${row('Strateji', `${x.ad} (${x.tf})`)}${row('Giriş', fmt(x.entry))}${row('Zarar-durdur', `<b class="sell">${fmt(x.stop)}</b>`)}${row('Hedef 1', `<b class="buy">${fmt(x.tp)}</b>`)}${row('Hedef 2 (isteğe bağlı)', fmt(x.tp + (x.tp - x.entry)))}${x.ai != null ? row('🤖 AI güven skoru', `<b class="${x.ai >= x.aiBase ? 'buy' : 'hold'}">%${(x.ai * 100).toFixed(0)}</b> <span class="note">(ortalama %${(x.aiBase * 100).toFixed(0)})</span>`) : ''}${row('Lot', lotOf(x))}
       ${row('Şu an', price ? `${fmt(price)} → <b class="${r >= 0 ? 'buy' : 'sell'}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</b>` : '—')}${row('Kalan süre', left + ' saat')}</table>
-      <p class="note">Bu sinyal kilitli: ekrandaki diğer göstergeler değişse de plan aynı kalır. Stop ve hedefi emirle koyun.</p>${x.exit ? '' : `<button class="closebtn ghost" data-id="${x.id}">Pozisyonu kendim kapattım</button>`}</div>`;
+      <p class="note">İsteğe bağlı kâr planı: Hedef 1'de pozisyonun yarısını kapatıp stopu girişe çekin, kalanını Hedef 2'ye bırakın (sonuç takibi Hedef 1'e göre yapılır).<br>Bu sinyal kilitli: ekrandaki diğer göstergeler değişse de plan aynı kalır. Stop ve hedefi emirle koyun.</p>${x.exit ? '' : `<button class="closebtn ghost" data-id="${x.id}">Pozisyonu kendim kapattım</button>`}</div>`;
   }).join('') : `<div class="sigbox"><div class="sigtitle hold">⏸ Sinyal yok – bekle</div><p class="note" style="margin:0">Yeni sinyal geldiğinde burada kilitli olarak görünür${notifyOn ? ' ve bildirim gelir' : ' (🔔 bildirimi açın)'}.</p></div>`;
   if (html !== lastSigHtml) { $('openSig').innerHTML = html; lastSigHtml = html; } // gereksiz yeniden çizim yok: düğmeye basış kaybolmaz
   const done = sigs.filter(x => x.res != null), w = done.filter(x => x.res > 0).length, tot = done.reduce((a, x) => a + x.res, 0);
-  $('scanStat').textContent = `${lastScan ? 'Son tarama ' + lastScan.toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'}) : 'Taranıyor…'} · Sonuçlanan ${done.length} sinyal, kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'}, toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R`;
+  $('scanStat').textContent = (newsFreeze() ? '⏸ ' + newsFreeze() + ' · ' : '') + `${lastScan ? 'Son tarama ' + lastScan.toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'}) : 'Taranıyor…'} · Sonuçlanan ${done.length} sinyal, kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'}, toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R`;
   $('sigHist').innerHTML = done.slice(-6).reverse().map(x => row(`${new Date(x.bar * 1000).toLocaleString('tr-TR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})} ${x.ad.split(' ')[0]} <b class="${x.long ? 'buy' : 'sell'}">${x.long ? 'AL' : 'SAT'}</b> @${fmt(x.entry)}`,
     x.res > 0 ? `<b class="buy">✓ +${x.res.toFixed(1)}R</b>` : `<b class="sell">✗ ${x.res.toFixed(1)}R</b>`)).join('');
   if (document.body.classList.contains('simple')) {
