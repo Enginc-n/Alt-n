@@ -691,17 +691,18 @@ function startPolling(tf) {
 function connect(tf) {
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
   clearInterval(pollT);
-  if (!SOURCES[srcIdx].ws || wsFail >= 4) return startPolling(tf);
-  const hosts = ['wss://stream.binance.com:9443', 'wss://data-stream.binance.vision'];
-  ws = new WebSocket(`${hosts[wsFail % 2]}/ws/paxgusdt@kline_${tf}`);
-  const guard = setTimeout(() => { if (ws && !ws.got) { wsFail++; connect(tf); } }, 10000); // 10 sn veri gelmezse sıradakini dene
+  // 443 standart HTTPS portu: Wi-Fi/kurum ağlarında 9443 sıkça engellenir
+  const hosts = ['wss://stream.binance.com:443', 'wss://data-stream.binance.vision', 'wss://stream.binance.com:9443'];
+  if (!SOURCES[srcIdx].ws || wsFail >= hosts.length) return startPolling(tf);
+  ws = new WebSocket(`${hosts[wsFail]}/ws/paxgusdt@kline_${tf}`);
+  const guard = setTimeout(() => { if (ws && !ws.got) { wsFail++; connect(tf); } }, 6000); // 6 sn veri gelmezse sıradakini, en sonunda 3 sn yoklamayı dene
   ws.onopen = () => { ws.ok = true; $('live').textContent = '🟢 CANLI'; };
   ws.onmessage = e => {
     ws.got = true; clearTimeout(guard);
     const k = JSON.parse(e.data).k;
     applyBar({time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c}, tf);
   };
-  ws.onclose = () => { clearTimeout(guard); if (!ws.got) wsFail++; $('live').textContent = '🔴 Bağlantı koptu, yeniden bağlanıyor…'; setTimeout(() => connect(tf), 3000); };
+  ws.onclose = () => { clearTimeout(guard); if (!ws || !ws.got) wsFail++; $('live').textContent = '🔴 Bağlantı koptu, yeniden bağlanıyor…'; setTimeout(() => connect(tf), 3000); };
 }
 // Her run() bir numara alır; daha yeni bir seçim yapıldıysa eski yüklemenin sonucu atılır (yarış koşulu)
 let runId = 0;
