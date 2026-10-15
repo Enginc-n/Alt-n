@@ -22,7 +22,7 @@ async function hist(tf) {
 }
 
 const CONFIGS = [['scalp', '1m'], ['scalp', '5m'], ['scalp', '15m'], ['normal', '5m'], ['normal', '15m'], ['normal', '1h'], ['scalp', '1h'], ['isabet', '1h'], ['dengeli', '1h']];
-const b = await chromium.launch();
+const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
 const rows = [], hours = {};
 for (const [mode, tf] of CONFIGS) {
   const p = await b.newPage();

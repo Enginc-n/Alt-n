@@ -17,7 +17,7 @@ async function hist(tf) {
   return (cache[tf] = out.slice(-(N[tf] || 1000)));
 }
 
-const b = await chromium.launch();
+const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
 let md = '## Parametre araştırması (seçim: ilk %60, doğrulama: son %40, spread dahil)\n';
 for (const [mode, tf] of [['normal', '15m'], ['normal', '1h'], ['scalp', '15m'], ['scalp', '1h']]) {
   const p = await b.newPage();

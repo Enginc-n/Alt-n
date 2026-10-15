@@ -18,7 +18,7 @@ async function hist(tf) {
 }
 const ideaSrc = readdirSync('test/ideas').filter(f => f.endsWith('.js')).map(f => readFileSync('test/ideas/' + f, 'utf8')).join('\n');
 
-const b = await chromium.launch();
+const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
 const rows = [];
 for (const tf of ['15m', '1h']) for (const mode of ['normal', 'dengeli']) {
   if (mode === 'dengeli' && tf !== '1h') continue;
