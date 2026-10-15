@@ -21,7 +21,7 @@ async function hist(tf) {
   return (cache[tf] = out.slice(-N[tf]));
 }
 
-const CONFIGS = [['scalp', '1m'], ['scalp', '5m'], ['scalp', '15m'], ['normal', '5m'], ['normal', '15m'], ['normal', '1h'], ['scalp', '1h'], ['isabet', '1h'], ['dengeli', '1h'], ['seans', '1h'], ['donus', '15m']];
+const CONFIGS = [['scalp', '1m'], ['scalp', '5m'], ['scalp', '15m'], ['normal', '5m'], ['normal', '15m'], ['normal', '1h'], ['scalp', '1h'], ['isabet', '1h'], ['dengeli', '1h'], ['seans', '1h'], ['donus', '15m'], ['kaplumbaga', '1h'], ['elder', '15m']];
 const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
 const rows = [], hours = {};
 for (const [mode, tf] of CONFIGS) {

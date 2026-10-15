@@ -109,7 +109,7 @@ b{font-weight:600;color:var(--text)}
     <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h" selected>1 saat</option>
     <option value="4h">4 saat</option><option value="1d">Günlük</option>
   </select>
-  <select id="mode" class="adv"><option value="seans" selected>🌅 Seans kırılımı ★ (1s)</option><option value="dengeli">📈 Dengeli (1s)</option><option value="donus">🔄 Ortalamaya dönüş (15dk)</option><option value="isabet">🎯 Yüksek isabet</option><option value="normal">Normal</option><option value="scalp">⚡ Scalp</option></select>
+  <select id="mode" class="adv"><option value="seans" selected>🌅 Seans kırılımı ★ (1s)</option><option value="dengeli">📈 Dengeli (1s)</option><option value="donus">🔄 Ortalamaya dönüş (15dk)</option><option value="kaplumbaga">🐢 Kaplumbağa (1s)</option><option value="elder">📐 Elder üçlü ekran (15dk)</option><option value="isabet">🎯 Yüksek isabet</option><option value="normal">Normal</option><option value="scalp">⚡ Scalp</option></select>
   <button id="refresh" title="Yenile" aria-label="Yenile">⟳</button>
   <button id="viewtgl" title="Görünüm">☰ Detay</button>
   <span id="src" class="note"></span>
@@ -127,7 +127,7 @@ b{font-weight:600;color:var(--text)}
       <div id="openSig"></div>
       <div id="scanStat" class="note"></div>
       <table id="sigHist"></table>
-      <p class="note">3 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🔄 Ortalamaya dönüş (15dk). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı anda en fazla 1 açık sinyal.</p></div>
+      <p class="note">5 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🐢 Kaplumbağa (1s), 🔄 Ortalamaya dönüş (15dk), 📐 Elder üçlü ekran (15dk) – birlikte günde ortalama ~6 sinyal (geçmiş veriye göre). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı yönde birden fazla sinyal açık olabilir, ters yönde sinyal verilmez.</p></div>
     <div class="card adv" id="actcard"><h2>Şimdi ne yapmalı?</h2><div id="action" class="big">…</div><div id="actdetail"></div><p id="actnote" class="note"></p><p id="modeinfo" class="note" style="border-top:1px solid #2a2f3a;padding-top:6px"></p></div>
     <div class="card adv"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
     <div class="card adv"><h2>İşlem planı</h2><table id="plan"></table></div>
@@ -172,6 +172,8 @@ Not: Bu sonuçlar tek bir dönemden; gelecekte aynı başarıyı garanti etmez. 
 <script>window.IDEAS = [];</script>
 <script src="ideas/session_breakout.js"></script>
 <script src="ideas/mean_reversion.js"></script>
+<script src="ideas/donchian_turtle.js"></script>
+<script src="ideas/elder_triple.js"></script>
 <script src="ind2.js"></script>
 <script src="smc.js"></script>
 <script>
@@ -286,6 +288,8 @@ function levels(d, w = 5) {
 const PRESETS = {
   isabet: {base: 'normal', th: 7, sl: 3, tp: 0.5, htf: true, reg: false, sess: true, max: 48},
   seans: {base: 'normal', idea: 'session_breakout', tf: '1h', th: 0, htf: false, reg: false, sess: false, max: 48},
+  kaplumbaga: {base: 'normal', idea: 'donchian_turtle', tf: '1h', th: 0, htf: false, reg: false, sess: false, max: 40},
+  elder: {base: 'normal', idea: 'elder_triple', tf: '15m', th: 0, htf: false, reg: false, sess: false, max: 24},
   donus: {base: 'normal', idea: 'mean_reversion', tf: '15m', th: 0, htf: false, reg: false, sess: false, max: 12},
   dengeli: {base: 'scalp', th: 3, sl: 3, tp: 1.5, htf: false, reg: true, sess: true, max: 48},
 };
@@ -560,7 +564,7 @@ function render() {
   $('mverdict').innerHTML = MT[state];
   $('mplan').textContent = state === 'go' || state === 'prep' ? `Stop ${fmt(S.stop)} · Hedef ${fmt(S.tp1)} · ${lot} lot` : (fakes[0] || EF.why);
   }
-  const MI = {seans: '🌅 Seans kırılımı: fikir turnuvasının kazananı. Asya seansı aralığının Londra/New York açılışında kırılması. Gerçek veride 156 gün: %54 kazanma, +15,3R, en büyük düşüş yalnızca 3,1R. Günde en fazla 1 işlem.', donus: '🔄 Ortalamaya dönüş: 15 dakikalık – sık işlem için. Gerçek veride 60 gün: 98 işlem, %54 kazanma, +10,4R.', dengeli: '📈 Dengeli: 1 saatlik (156 gün: %54 kazanma, +30R; ayarları bu verinin bir kısmında seçildi).', isabet: '🎯 Yüksek isabet: sık kazanır ama kazançlar küçük (4 ay: %72 kazanma, +7,6R).', normal: 'Normal: genel analiz modu – testte tutarlı kâr göstermedi, işlem için 📈 Dengeli önerilir.', scalp: '⚡ Scalp: 1–15 dk testlerinde zarar etti; sık işlem için önerilmez.'};
+  const MI = {kaplumbaga: '🐢 Kaplumbağa (Curtis Faith, Way of the Turtle): 20 mumluk kanal kırılımı, üst trend yönünde. Gerçek veride 156 gün: 105 işlem, %44 kazanma, +24R.', elder: '📐 Elder üçlü ekran (Trading for a Living): üst trend yönünde RSI geri çekilmesinden dönüş. Gerçek veride 60 gün: 160 işlem, %50 kazanma, +14,9R.', seans: '🌅 Seans kırılımı: fikir turnuvasının kazananı. Asya seansı aralığının Londra/New York açılışında kırılması. Gerçek veride 156 gün: %54 kazanma, +15,3R, en büyük düşüş yalnızca 3,1R. Günde en fazla 1 işlem.', donus: '🔄 Ortalamaya dönüş: 15 dakikalık – sık işlem için. Gerçek veride 60 gün: 98 işlem, %54 kazanma, +10,4R.', dengeli: '📈 Dengeli: 1 saatlik (156 gün: %54 kazanma, +30R; ayarları bu verinin bir kısmında seçildi).', isabet: '🎯 Yüksek isabet: sık kazanır ama kazançlar küçük (4 ay: %72 kazanma, +7,6R).', normal: 'Normal: genel analiz modu – testte tutarlı kâr göstermedi, işlem için 📈 Dengeli önerilir.', scalp: '⚡ Scalp: 1–15 dk testlerinde zarar etti; sık işlem için önerilmez.'};
   $('modeinfo').textContent = MI[$('mode').value] || '';
   journalUpdate(A, EC);
   signalAlert(state, S, A);
@@ -623,7 +627,7 @@ function journalUpdate(A, E) {
   journalSave();
   const done = journal.filter(j => j.res != null), w = done.filter(j => j.res > 0).length, tot = done.reduce((a, j) => a + j.res, 0);
   $('jsum').textContent = journal.length ? `${journal.length} sinyal · sonuçlanan ${done.length} · kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'} · toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R` : 'Henüz sinyal yok.';
-  const ML = {normal: 'Normal', scalp: 'Scalp', isabet: '🎯', dengeli: '📈', seans: '🌅', donus: '🔄'};
+  const ML = {normal: 'Normal', scalp: 'Scalp', isabet: '🎯', dengeli: '📈', seans: '🌅', donus: '🔄', kaplumbaga: '🐢', elder: '📐'};
   $('journal').innerHTML = journal.slice(-8).reverse().map(j => row(
     `${new Date(j.bar * 1000).toLocaleString('tr-TR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})} ${ML[j.mode] || j.mode} ${j.tf} <b class="${j.long ? 'buy' : 'sell'}">${j.long ? 'AL' : 'SAT'}</b> @${fmt(j.entry)}`,
     j.res == null ? '⏳ açık' : j.res > 0 ? `<b class="buy">✓ +${j.res.toFixed(1)}R</b>` : '<b class="sell">✗ −1R</b>')).join('');
@@ -719,7 +723,7 @@ $('mode').onchange = () => { const m = $('mode').value; if (PRESETS[m]) $('tf').
 try { const m = localStorage.getItem('altin_mode'), t = localStorage.getItem('altin_tf'); if (m && $('mode').querySelector(`option[value="${m}"]`)) $('mode').value = m; if (t) $('tf').value = t; } catch {}
 ['mode', 'tf'].forEach(id => $(id).addEventListener('change', () => { try { localStorage.setItem('altin_' + id, $(id).value); } catch {} }));
 // ================= Sinyal merkezi: çoklu strateji tarayıcı + kilitli sinyaller =================
-const STRATS = [{mode: 'seans', tf: '1h', ad: '🌅 Seans kırılımı'}, {mode: 'dengeli', tf: '1h', ad: '📈 Dengeli'}, {mode: 'donus', tf: '15m', ad: '🔄 Ortalamaya dönüş'}];
+const STRATS = [{mode: 'seans', tf: '1h', ad: '🌅 Seans kırılımı'}, {mode: 'dengeli', tf: '1h', ad: '📈 Dengeli'}, {mode: 'donus', tf: '15m', ad: '🔄 Ortalamaya dönüş'}, {mode: 'kaplumbaga', tf: '1h', ad: '🐢 Kaplumbağa'}, {mode: 'elder', tf: '15m', ad: '📐 Elder üçlü ekran'}];
 let sigs = []; try { sigs = JSON.parse(localStorage.getItem('altin_sigs') || '[]'); } catch {}
 const sigSave = () => { try { localStorage.setItem('altin_sigs', JSON.stringify(sigs.slice(-100))); } catch {} };
 let lastScan = null, scanBusy = false;
@@ -738,7 +742,8 @@ async function scanOnce() {
       finally { $('mode').value = save.m; $('tf').value = save.t; htf = save.h; STRONG = save.s; }
       const bar = d[d.length - 1];
       if (!E.ok || sigs.some(x => x.mode === st.mode && x.bar === bar.time)) continue;
-      if (sigs.some(x => x.res == null)) continue; // aynı anda tek açık sinyal: çelişkili girişleri önler
+      // Aynı yönde farklı stratejilerin sinyalleri birlikte açık kalabilir; ters yönde sinyal açılmaz (çelişkiyi önler)
+      if (sigs.some(x => x.res == null && (x.long !== P.long || x.mode === st.mode))) continue;
       const sg = P.long ? 1 : -1, dS = Math.abs(P.price - P.stop), dT = Math.abs(P.tp1 - P.price), e = bar.open;
       const maxBars = (P.sig && P.sig.max) || (PRESETS[st.mode] && PRESETS[st.mode].max) || 48;
       const x = {id: st.mode + bar.time, mode: st.mode, ad: st.ad, tf: st.tf, bar: bar.time, long: P.long, entry: e, stop: e - sg * dS, tp: e + sg * dT,
