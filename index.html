@@ -340,6 +340,7 @@ function calc() {
   $('calc').innerHTML = row('Riske edilen', '$' + fmt(riskUsd)) + row('Stop mesafesi', fmt(stopPips) + ' pip') +
     row('1 lot için pip değeri', '$' + fmt(pipVal)) + row('<b>Önerilen lot</b>', lot < 0.01 ? `<b class="sell">${lot.toFixed(3)} (min. 0,01 lot – bakiye/risk yetersiz)</b>` : `<b class="hold">${lot.toFixed(2)}</b>`) +
     row('Hedef 1 kârı', '$' + fmt(Math.abs(lastA.tp1 - lastA.price) / ps * pipVal * lot)) +
+    row('Spread / risk', (() => { const q = (+$('spread').value || 0) / lastA.risk * 100; return `<b class="${q > 25 ? 'sell' : 'buy'}">%${q.toFixed(0)}${q > 25 ? ' – maliyet çok yüksek, daha büyük zaman dilimi seçin' : ''}</b>`; })()) +
     row('Hedef 2 kârı', '$' + fmt(Math.abs(lastA.tp2 - lastA.price) / ps * pipVal * lot));
 }
 function render() {
