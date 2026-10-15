@@ -27,8 +27,7 @@ tp1R     = input.float(1.0, "TP1 (R)", minval=0.1, step=0.1, group=gR)
 tp2R     = input.float(2.5, "TP2 (R)", minval=0.2, step=0.1, group=gR)
 
 gG = "Görünüm"
-showTbl  = input.bool(true, "Skor tablosunu göster", group=gG)
-showStat = input.bool(true, "İstatistik tablosunu göster", group=gG)
+showTbl  = input.bool(true, "Sağ üst paneli göster", group=gG)
 
 // ───────── 1) Volatiliteye göre normalize momentum ─────────
 atr = ta.atr(atrLen)
@@ -192,33 +191,27 @@ alertcondition(evShort, "SAT", "Kripto Ajan: SAT sinyali")
 alertcondition(evTp1, "TP1 + SL girişe", "Kripto Ajan: TP1 alındı, SL girişe taşındı")
 alertcondition(evClose, "Pozisyon kapat", "Kripto Ajan: Pozisyon kapat")
 
-// ───────── TABLOLAR ─────────
-var table tSc = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 20), border_width=1)
-var table tSt = table.new(position.bottom_right, 2, 4, bgcolor=color.new(color.black, 20), border_width=1)
-if barstate.islast
-    if showTbl
-        color sc = score > 0 ? color.lime : score < 0 ? color.red : color.gray
-        table.cell(tSc, 0, 0, "Skor", text_color=color.white)
-        table.cell(tSc, 1, 0, str.tostring(score, "#"), text_color=sc)
-        table.cell(tSc, 0, 1, "Momentum", text_color=color.white)
-        table.cell(tSc, 1, 1, str.tostring(mom, "#.##"), text_color=mom > 0 ? color.lime : color.red)
-        table.cell(tSc, 0, 2, "Hacim akışı", text_color=color.white)
-        table.cell(tSc, 1, 2, str.tostring(flow, "#.##") + " / x" + str.tostring(relVol, "#.#"), text_color=flow > 0 ? color.lime : color.red)
-        table.cell(tSc, 0, 3, "ER rejim", text_color=color.white)
-        table.cell(tSc, 1, 3, str.tostring(er, "#.##") + (trendOk ? " Trend" : " Yatay"), text_color=trendOk ? color.aqua : color.gray)
-        table.cell(tSc, 0, 4, "ÜZD eğilim", text_color=color.white)
-        table.cell(tSc, 1, 4, htfDir == 1 ? "Yukarı" : htfDir == -1 ? "Aşağı" : "Nötr", text_color=htfDir == 1 ? color.lime : htfDir == -1 ? color.red : color.gray)
-        table.cell(tSc, 0, 5, "Pozisyon", text_color=color.white)
-        table.cell(tSc, 1, 5, pos == 1 ? "LONG" + (tp1Hit ? " (BE)" : "") : pos == -1 ? "SHORT" + (tp1Hit ? " (BE)" : "") : "Yok", text_color=color.yellow)
-    if showStat
-        float wr = trades > 0 ? 100.0 * wins / trades : 0.0
-        table.cell(tSt, 0, 0, "İşlem", text_color=color.white)
-        table.cell(tSt, 1, 0, str.tostring(trades), text_color=color.white)
-        table.cell(tSt, 0, 1, "Kazanma %", text_color=color.white)
-        table.cell(tSt, 1, 1, str.tostring(wr, "#.#") + "%", text_color=color.white)
-        table.cell(tSt, 0, 2, "Toplam R", text_color=color.white)
-        table.cell(tSt, 1, 2, str.tostring(totR, "#.##"), text_color=totR >= 0 ? color.lime : color.red)
-        table.cell(tSt, 0, 3, "Ort. R", text_color=color.white)
-        table.cell(tSt, 1, 3, str.tostring(trades > 0 ? totR / trades : 0.0, "#.##"), text_color=color.white)
+// ───────── PANEL (sağ üst) ─────────
+var table tP = table.new(position.top_right, 2, 7, border_width=1, border_color=color.new(color.gray, 60))
+if barstate.islast and showTbl
+    color hdrBg = pos == 1 ? color.new(color.green, 15) : pos == -1 ? color.new(color.red, 15) : color.new(#2a1a8c, 0)
+    string st = pos == 1 ? (tp1Hit ? "🛡 LONG (BE)" : "🟢 LONG") : pos == -1 ? (tp1Hit ? "🛡 SHORT (BE)" : "🔴 SHORT") : "⏳ PUSUDA"
+    color cellBg = color.new(#3a3f4b, 10)
+    table.cell(tP, 0, 0, "🤖 KRİPTO AJAN PRO", text_color=color.white, bgcolor=hdrBg, text_size=size.normal)
+    table.cell(tP, 1, 0, st, text_color=color.white, bgcolor=color.new(color.gray, 30), text_size=size.normal)
+    table.cell(tP, 0, 1, "Giriş / Güncel SL:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 1, 1, pos != 0 ? str.tostring(entry, format.mintick) + " / " + str.tostring(sl, format.mintick) : "-", text_color=color.yellow, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 0, 2, "TP1 / TP2:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 1, 2, pos != 0 ? str.tostring(tp1, format.mintick) + (tp1Hit ? " ✓" : "") + " / " + str.tostring(tp2, format.mintick) : "-", text_color=color.lime, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 0, 3, "Anlık R:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
+    float liveR = pos != 0 ? pos * (close - entry) / risk : na
+    table.cell(tP, 1, 3, pos != 0 ? (liveR >= 0 ? "+" : "") + str.tostring(liveR, "#.##") + " R" : "-", text_color=pos != 0 and liveR >= 0 ? color.lime : color.red, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 0, 4, "Skor / Rejim:", text_color=color.white, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 1, 4, str.tostring(score, "#") + " / " + (trendOk ? "Trend" : "Yatay") + (htfDir == 1 ? " ↑" : htfDir == -1 ? " ↓" : ""), text_color=score > 0 ? color.lime : score < 0 ? color.red : color.gray, bgcolor=cellBg, text_size=size.small)
+    float wr = trades > 0 ? 100.0 * wins / trades : 0.0
+    table.cell(tP, 0, 5, "Başarı (Win Rate):", text_color=color.white, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 1, 5, "%" + str.tostring(wr, "#.#") + " (" + str.tostring(wins) + "W / " + str.tostring(trades - wins) + "L)", text_color=color.orange, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 0, 6, "Net Büyüme (R):", text_color=color.white, bgcolor=cellBg, text_size=size.small)
+    table.cell(tP, 1, 6, (totR >= 0 ? "+" : "") + str.tostring(totR, "#.#") + " R", text_color=totR >= 0 ? color.lime : color.red, bgcolor=cellBg, text_size=size.small)
 
 plot(score, "Skor", display=display.data_window)
