@@ -493,6 +493,7 @@ function calc() {
     row('Hedef 2 kârı', '$' + fmt(Math.abs(lastA.tp2 - lastA.price) / ps * pipVal * lot));
 }
 function render() {
+  if (!data || data.length < 100) return;
   const d = data, A = analyze(d); lastA = A;
   const ser = arr => d.map((k, i) => arr[i] == null ? {time: k.time} : {time: k.time, value: arr[i]});
   const SIMPLE = document.body.classList.contains('simple');
@@ -698,10 +699,15 @@ function connect(tf) {
   };
   ws.onclose = () => { clearTimeout(guard); if (!ws.got) wsFail++; $('live').textContent = '🔴 Bağlantı koptu, yeniden bağlanıyor…'; setTimeout(() => connect(tf), 3000); };
 }
+// Her run() bir numara alır; daha yeni bir seçim yapıldıysa eski yüklemenin sonucu atılır (yarış koşulu)
+let runId = 0;
 async function run() {
-  const tf = $('tf').value;
-  data = await loadData(tf);
-  htf = HTF[tf] ? buildHtf(await fetchKlines(HTF[tf]), HTF[tf]) : [];
+  const id = ++runId, tf = $('tf').value;
+  const d = await loadData(tf);
+  if (id !== runId) return;
+  const h = HTF[tf] ? buildHtf(await fetchKlines(HTF[tf]), HTF[tf]) : [];
+  if (id !== runId) return;
+  data = d; htf = h; closedCache = {};
   showBacktest(backtest(data), backtest(data, false)); render();
   connect(tf);
 }
