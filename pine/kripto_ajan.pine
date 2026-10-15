@@ -1,0 +1,224 @@
+//@version=5
+// Kripto Ajan – Akış & Rejim
+// Volatiliteye göre normalize momentum + hacim akış baskısı + Kaufman verimlilik rejimi + üst zaman dilimi eğilimi.
+// Sinyaller yalnızca kapanmış mumlarda üretilir (repaint yok). Tek pozisyon disiplini uygulanır.
+indicator("Kripto Ajan – Akış & Rejim", shorttitle="KriptoAjan", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
+
+// ───────── GİRDİLER ─────────
+gS = "Sinyal"
+emaLen   = input.int(34, "Momentum EMA uzunluğu", minval=2, group=gS)
+atrLen   = input.int(14, "ATR uzunluğu", minval=1, group=gS)
+momSm    = input.int(5, "Momentum yumuşatma", minval=1, group=gS)
+flowLen  = input.int(20, "Hacim akış penceresi", minval=2, group=gS)
+scoreThr = input.int(55, "Skor eşiği (0-100)", minval=1, maxval=100, group=gS)
+
+gF = "Filtreler"
+erLen    = input.int(20, "Verimlilik oranı (ER) uzunluğu", minval=2, group=gF)
+erMin    = input.float(0.30, "Min ER (trend rejimi)", minval=0.0, maxval=1.0, step=0.05, group=gF)
+useVol   = input.bool(true, "Göreli hacim filtresi", group=gF)
+volK     = input.float(1.2, "Hacim çarpanı (k × SMA)", minval=0.1, step=0.1, group=gF)
+useHtf   = input.bool(true, "Üst zaman dilimi filtresi", group=gF)
+htfTf    = input.timeframe("240", "Üst zaman dilimi", group=gF)
+htfLen   = input.int(50, "ÜZD EMA uzunluğu", minval=2, group=gF)
+
+gR = "Risk"
+slMult   = input.float(1.5, "Stop ATR çarpanı", minval=0.1, step=0.1, group=gR)
+tp1R     = input.float(1.0, "TP1 (R)", minval=0.1, step=0.1, group=gR)
+tp2R     = input.float(2.5, "TP2 (R)", minval=0.2, step=0.1, group=gR)
+
+gG = "Görünüm"
+showTbl  = input.bool(true, "Skor tablosunu göster", group=gG)
+showStat = input.bool(true, "İstatistik tablosunu göster", group=gG)
+
+// ───────── 1) Volatiliteye göre normalize momentum ─────────
+atr = ta.atr(atrLen)
+mom = ta.ema((close - ta.ema(close, emaLen)) / math.max(atr, syminfo.mintick), momSm)
+
+// ───────── 2) Hacim akış baskısı ─────────
+rng      = high - low
+bodyFrac = rng > 0 ? (close - open) / rng : 0.0          // -1..+1 mum gövde oranı
+sVol     = nz(volume) * bodyFrac                          // işaretli hacim
+volSma   = ta.sma(nz(volume), flowLen)
+flow     = volSma > 0 ? math.sum(sVol, flowLen) / (volSma * flowLen) : 0.0   // yaklaşık -1..+1
+relVol   = volSma > 0 ? nz(volume) / volSma : 0.0
+volOk    = not useVol or relVol >= volK
+
+// ───────── 3) Kaufman Verimlilik Oranı (rejim) ─────────
+erNoise = math.sum(math.abs(close - nz(close[1], close)), erLen)
+er      = erNoise > 0 ? math.abs(close - nz(close[erLen], close)) / erNoise : 0.0
+trendOk = er >= erMin
+
+// ───────── 4) Üst zaman dilimi eğilimi (repaint yok: [1] ofset + lookahead_off) ─────────
+htfFn() =>
+    e = ta.ema(close, htfLen)
+    [e[1], e[2]]
+[htfE1, htfE2] = request.security(syminfo.tickerid, htfTf, htfFn(), lookahead=barmerge.lookahead_off)
+htfDir  = nz(htfE1) > nz(htfE2) ? 1 : nz(htfE1) < nz(htfE2) ? -1 : 0
+htfBull = not useHtf or htfDir == 1
+htfBear = not useHtf or htfDir == -1
+
+// ───────── 5) Bileşik skor (-100..+100) ─────────
+clamp(x, lo, hi) => math.max(lo, math.min(hi, x))
+momPart  = clamp(mom / 2.0, -1.0, 1.0) * 40.0
+flowPart = clamp(flow * 2.5, -1.0, 1.0) * 30.0
+htfPart  = htfDir * 20.0
+erPart   = math.sign(mom) * er * 10.0
+score    = clamp(momPart + flowPart + htfPart + erPart, -100.0, 100.0)
+
+longCond  = ta.crossover(score, scoreThr) and trendOk and volOk and htfBull and flow > 0
+shortCond = ta.crossunder(score, -scoreThr) and trendOk and volOk and htfBear and flow < 0
+
+// ───────── POZİSYON DURUMU ─────────
+var int   pos    = 0        // 0 yok, 1 long, -1 short
+var float entry  = na
+var float sl     = na
+var float tp1    = na
+var float tp2    = na
+var float risk   = na
+var bool  tp1Hit = false
+var int   entryBar = 0
+var line  lnE = na
+var line  lnS = na
+var line  lnT1 = na
+var line  lnT2 = na
+var box   bxW = na
+var box   bxL = na
+// İstatistikler
+var int   trades = 0
+var int   wins   = 0
+var float totR   = 0.0
+
+// Olay bayrakları (alertcondition için her mumda sıfırlanır)
+bool evLong = false
+bool evShort = false
+bool evTp1 = false
+bool evClose = false
+
+if barstate.isconfirmed
+    // --- Açık pozisyonu yönet ---
+    if pos != 0 and bar_index > entryBar
+        bool   doClose = false
+        float  r = 0.0
+        string why = ""
+        bool hitSL  = pos == 1 ? low <= sl : high >= sl
+        bool hitT1  = pos == 1 ? high >= tp1 : low <= tp1
+        bool hitT2  = pos == 1 ? high >= tp2 : low <= tp2
+        if not tp1Hit
+            if hitSL                       // aynı mumda ikisi de olursa temkinli: önce stop
+                doClose := true
+                r := -1.0
+                why := "Stop"
+            else if hitT1
+                tp1Hit := true
+                evTp1 := true
+                sl := entry
+                line.set_y1(lnS, sl)
+                line.set_y2(lnS, sl)
+                label.new(bar_index, pos == 1 ? high : low, "🎯 TP1 + SL GİRİŞE", style=pos == 1 ? label.style_label_down : label.style_label_up, color=color.new(color.lime, 10), textcolor=color.black, size=size.small)
+                if hitT2
+                    doClose := true
+                    r := 0.5 * tp1R + 0.5 * tp2R
+                    why := "TP2"
+        else
+            if hitSL
+                doClose := true
+                r := 0.5 * tp1R
+                why := "Başabaş stop"
+            else if hitT2
+                doClose := true
+                r := 0.5 * tp1R + 0.5 * tp2R
+                why := "TP2"
+        // Ters sinyal: pozisyonu kapanış fiyatından kapat
+        if not doClose and ((pos == 1 and shortCond) or (pos == -1 and longCond))
+            float rem = pos * (close - entry) / risk
+            r := tp1Hit ? 0.5 * tp1R + 0.5 * rem : rem
+            doClose := true
+            why := "Ters sinyal"
+            label.new(bar_index, pos == 1 ? high : low, "📤 POZİSYONU KAPAT", style=pos == 1 ? label.style_label_down : label.style_label_up, color=color.new(color.orange, 10), textcolor=color.black, size=size.small)
+        if doClose
+            evClose := true
+            trades += 1
+            wins += r > 0 ? 1 : 0
+            totR += r
+            if why != "Ters sinyal"
+                label.new(bar_index, pos == 1 ? high : low, "🏁 POZİSYON KAPAT\n" + why + " (" + str.tostring(r, "#.##") + "R)", style=pos == 1 ? label.style_label_down : label.style_label_up, color=color.new(color.gray, 10), textcolor=color.white, size=size.small)
+            alert("Kripto Ajan " + syminfo.ticker + " POZİSYON KAPAT: " + why + " | Fiyat " + str.tostring(close, format.mintick) + " | " + str.tostring(r, "#.##") + "R", alert.freq_once_per_bar_close)
+            line.set_x2(lnE, bar_index)
+            line.set_x2(lnS, bar_index)
+            line.set_x2(lnT1, bar_index)
+            line.set_x2(lnT2, bar_index)
+            line.set_extend(lnE, extend.none)
+            line.set_extend(lnS, extend.none)
+            line.set_extend(lnT1, extend.none)
+            line.set_extend(lnT2, extend.none)
+            box.set_right(bxW, bar_index)
+            box.set_right(bxL, bar_index)
+            pos := 0
+            tp1Hit := false
+        else
+            if evTp1
+                alert("Kripto Ajan " + syminfo.ticker + " TP1 alındı, SL girişe: " + str.tostring(entry, format.mintick), alert.freq_once_per_bar_close)
+            line.set_x2(lnE, bar_index)
+            line.set_x2(lnS, bar_index)
+            line.set_x2(lnT1, bar_index)
+            line.set_x2(lnT2, bar_index)
+            box.set_right(bxW, bar_index)
+            box.set_right(bxL, bar_index)
+    // --- Yeni sinyal ara (yalnızca pozisyon yokken ve kapanış bu mumda olmadıysa) ---
+    else if pos == 0 and (longCond or shortCond)
+        pos := longCond ? 1 : -1
+        entry := close
+        risk := slMult * atr
+        sl := entry - pos * risk
+        tp1 := entry + pos * tp1R * risk
+        tp2 := entry + pos * tp2R * risk
+        tp1Hit := false
+        entryBar := bar_index
+        evLong := pos == 1
+        evShort := pos == -1
+        lnE  := line.new(bar_index, entry, bar_index + 1, entry, color=color.gray, width=2, extend=extend.right)
+        lnS  := line.new(bar_index, sl, bar_index + 1, sl, color=color.red, width=2, extend=extend.right)
+        lnT1 := line.new(bar_index, tp1, bar_index + 1, tp1, color=color.rgb(129, 230, 129), width=2, extend=extend.right)
+        lnT2 := line.new(bar_index, tp2, bar_index + 1, tp2, color=color.rgb(0, 120, 40), width=2, extend=extend.right)
+        bxW  := box.new(bar_index, math.max(entry, tp2), bar_index + 1, math.min(entry, tp2), border_color=color.new(color.green, 100), bgcolor=color.new(color.green, 85))
+        bxL  := box.new(bar_index, math.max(entry, sl), bar_index + 1, math.min(entry, sl), border_color=color.new(color.red, 100), bgcolor=color.new(color.red, 85))
+        string info = "Giriş: " + str.tostring(entry, format.mintick) + "\nSL: " + str.tostring(sl, format.mintick) + "\nTP1: " + str.tostring(tp1, format.mintick) + "\nTP2: " + str.tostring(tp2, format.mintick) + "\nSkor: " + str.tostring(score, "#")
+        label.new(bar_index, pos == 1 ? low : high, pos == 1 ? "🟢 AL" : "🔴 SAT", style=pos == 1 ? label.style_label_up : label.style_label_down, color=pos == 1 ? color.green : color.red, textcolor=color.white, tooltip=info)
+        alert("Kripto Ajan " + syminfo.ticker + (pos == 1 ? " AL" : " SAT") + " | " + str.replace_all(info, "\n", " | "), alert.freq_once_per_bar_close)
+
+// ───────── ALARMLAR ─────────
+alertcondition(evLong, "AL", "Kripto Ajan: AL sinyali")
+alertcondition(evShort, "SAT", "Kripto Ajan: SAT sinyali")
+alertcondition(evTp1, "TP1 + SL girişe", "Kripto Ajan: TP1 alındı, SL girişe taşındı")
+alertcondition(evClose, "Pozisyon kapat", "Kripto Ajan: Pozisyon kapat")
+
+// ───────── TABLOLAR ─────────
+var table tSc = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 20), border_width=1)
+var table tSt = table.new(position.bottom_right, 2, 4, bgcolor=color.new(color.black, 20), border_width=1)
+if barstate.islast
+    if showTbl
+        color sc = score > 0 ? color.lime : score < 0 ? color.red : color.gray
+        table.cell(tSc, 0, 0, "Skor", text_color=color.white)
+        table.cell(tSc, 1, 0, str.tostring(score, "#"), text_color=sc)
+        table.cell(tSc, 0, 1, "Momentum", text_color=color.white)
+        table.cell(tSc, 1, 1, str.tostring(mom, "#.##"), text_color=mom > 0 ? color.lime : color.red)
+        table.cell(tSc, 0, 2, "Hacim akışı", text_color=color.white)
+        table.cell(tSc, 1, 2, str.tostring(flow, "#.##") + " / x" + str.tostring(relVol, "#.#"), text_color=flow > 0 ? color.lime : color.red)
+        table.cell(tSc, 0, 3, "ER rejim", text_color=color.white)
+        table.cell(tSc, 1, 3, str.tostring(er, "#.##") + (trendOk ? " Trend" : " Yatay"), text_color=trendOk ? color.aqua : color.gray)
+        table.cell(tSc, 0, 4, "ÜZD eğilim", text_color=color.white)
+        table.cell(tSc, 1, 4, htfDir == 1 ? "Yukarı" : htfDir == -1 ? "Aşağı" : "Nötr", text_color=htfDir == 1 ? color.lime : htfDir == -1 ? color.red : color.gray)
+        table.cell(tSc, 0, 5, "Pozisyon", text_color=color.white)
+        table.cell(tSc, 1, 5, pos == 1 ? "LONG" + (tp1Hit ? " (BE)" : "") : pos == -1 ? "SHORT" + (tp1Hit ? " (BE)" : "") : "Yok", text_color=color.yellow)
+    if showStat
+        float wr = trades > 0 ? 100.0 * wins / trades : 0.0
+        table.cell(tSt, 0, 0, "İşlem", text_color=color.white)
+        table.cell(tSt, 1, 0, str.tostring(trades), text_color=color.white)
+        table.cell(tSt, 0, 1, "Kazanma %", text_color=color.white)
+        table.cell(tSt, 1, 1, str.tostring(wr, "#.#") + "%", text_color=color.white)
+        table.cell(tSt, 0, 2, "Toplam R", text_color=color.white)
+        table.cell(tSt, 1, 2, str.tostring(totR, "#.##"), text_color=totR >= 0 ? color.lime : color.red)
+        table.cell(tSt, 0, 3, "Ort. R", text_color=color.white)
+        table.cell(tSt, 1, 3, str.tostring(trades > 0 ? totR / trades : 0.0, "#.##"), text_color=color.white)
+
+plot(score, "Skor", display=display.data_window)

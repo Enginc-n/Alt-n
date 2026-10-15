@@ -22,6 +22,7 @@ Altın (XAU/USD) için tarayıcıda çalışan teknik analiz uygulaması. `index
 - ✅ "Şimdi ne yapmalı?" kartı: İŞLEM AÇ yalnızca kapanmış mumla teyitli; 🟡 HAZIRLAN ön uyarısı; fırsat kaçtı uyarısı
 - 🪤 Sahte mum uyarıları: fitil tuzağı, sahte kırılım, anormal mum, likidite avı
 - 📒 Sinyal günlüğü (sonuçlar otomatik işaretlenir, CSV indirme)
+- 📈 TradingView göstergesi (kripto): pine/kripto_ajan.pine – Akış & Rejim skoru, tek pozisyon, TP1+başabaş, TP2, alarmlar
 - 📱 Mobil uyumlu: alt sinyal çubuğu, ana ekrana eklenebilir (PWA), sinyal değişince titreşim + bildirim
 - Tekniklerin açıklamaları
 
