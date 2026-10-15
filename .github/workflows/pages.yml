@@ -22,6 +22,12 @@ jobs:
         with:
           enablement: true
       - run: mkdir _site && cp index.html manifest.json icon.svg sw.js _site/
-      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+      # upload-pages-artifact içindeki sabitlenmemiş adım yerine aynı işlemi doğrudan yapıyoruz
+      - run: tar --dereference --hard-dereference -cvf artifact.tar -C _site .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: github-pages
+          path: artifact.tar
+          retention-days: 1
       - id: d
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
