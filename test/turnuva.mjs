@@ -4,7 +4,7 @@
 import {chromium} from 'playwright';
 import {appendFileSync, readdirSync, readFileSync} from 'fs';
 
-const N = {'15m': 6000, '1h': 4000, '4h': 2000, '1d': 1000};
+const N = {'5m': 6000, '15m': 6000, '1h': 4000, '4h': 2000, '1d': 1000};
 const cache = {};
 async function hist(tf) {
   if (cache[tf]) return cache[tf];
@@ -21,7 +21,7 @@ const ideaSrc = readdirSync('ideas').filter(f => f.endsWith('.js')).map(f => rea
 process.on('unhandledRejection', e => console.log('YAKALANMAMIŞ', e?.message));
 const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
 const rows = [];
-for (const tf of ['15m', '1h']) for (const mode of ['normal', 'dengeli']) {
+for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) {
   if (mode === 'dengeli' && tf !== '1h') continue;
   const p = await b.newPage();
   p.on('pageerror', e => console.log('HATA', e.message)); p.on('crash', () => console.log('SAYFA ÇÖKTÜ'));
