@@ -317,7 +317,7 @@ function backtest(d, filt = true) {
     {time: t.time, position: t.long ? 'belowBar' : 'aboveBar', color: '#d4af37', shape: t.long ? 'arrowUp' : 'arrowDown', text: t.long ? 'T-AL' : 'T-SAT'},
     {time: t.exit, position: 'inBar', color: t.R > 0 ? '#00e676' : '#ff1744', shape: 'circle', text: (t.R > 0 ? '+' : '') + t.R.toFixed(1) + 'R'},
   ]);
-  return {n: trades.length, win: trades.length ? wins.length / trades.length * 100 : 0, total: eq, pf: gl ? gw / gl : Infinity, dd, curve, open: pos};
+  return {trades, n: trades.length, win: trades.length ? wins.length / trades.length * 100 : 0, total: eq, pf: gl ? gw / gl : Infinity, dd, curve, open: pos};
 }
 function showBacktest(B, base) {
   const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
