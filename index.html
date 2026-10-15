@@ -18,7 +18,7 @@
 header{padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #262a33}
 h1{font-size:18px;margin:0 12px 0 0;color:var(--gold)}
 input{width:110px;text-align:right}input,select,button{background:var(--panel);color:var(--text);border:1px solid #333;border-radius:6px;padding:6px 10px}
-#price{font-weight:700;font-size:18px;margin-left:auto}
+#price,#mprice{color:#ff4fa3}#price{font-weight:700;font-size:18px;margin-left:auto}
 main{display:grid;grid-template-columns:1fr 340px;gap:12px;padding:12px 16px}
 @media(max-width:900px){main{grid-template-columns:1fr}}
 #chart{height:460px}#rsi{height:120px;margin-top:6px}
@@ -545,8 +545,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 function showPrice(p) {
   const el = $('price');
   el.textContent = '$' + fmt(p);
-  if (lastPrice != null && p !== lastPrice) el.style.color = p > lastPrice ? 'var(--up)' : 'var(--down)';
-  lastPrice = p; $('mprice').textContent = el.textContent; $('mprice').style.color = el.style.color;
+  lastPrice = p; $('mprice').textContent = el.textContent;
 }
 function connect(tf) {
   if (ws) { ws.onclose = null; ws.close(); }
