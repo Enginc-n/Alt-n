@@ -64,7 +64,7 @@ for (const inst of ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP']) for (con
   if (d.length < 1000) { md += `\n${inst} ${bar}: veri yetersiz (${d.length})\n`; continue; }
   const F = features(d, h, {emaLen: 34, htf}), split = Math.floor(d.length * 0.6), days = ((d[d.length - 1].t - d[0].t) / 86400).toFixed(0);
   const grid = [];
-  for (const thr of [40, 55, 70]) for (const er of [0.2, 0.3, 0.4]) for (const vol of [true, false]) for (const sl of [1.5, 2, 2.5]) for (const tp1 of [1, 1.5]) for (const tp2 of [2, 3])
+  for (const thr of [40, 55, 70]) for (const er of [0.2, 0.3, 0.4]) for (const vol of [true, false]) for (const sl of [1.5, 2, 2.5]) for (const tp1 of [1, 1.5]) for (const tp2 of [2, 2.5, 3])
     grid.push({thr, er, vol, sl, tp1, tp2});
   const res = grid.map(p => ({p, is: sim(d, F, p, 0, split), oos: sim(d, F, p, split, d.length)}));
   const key = `${bar}`; (pooled[key] ??= res.map(r => ({p: r.p, is: 0, oos: 0, nis: 0, noos: 0})));
