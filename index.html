@@ -27,8 +27,10 @@ main{display:grid;grid-template-columns:1fr 340px;gap:12px;padding:12px 16px}
 .big{font-size:26px;font-weight:800}.buy{color:var(--up)}.sell{color:var(--down)}.hold{color:var(--gold)}
 table{width:100%;font-size:13px;border-collapse:collapse}td{padding:3px 0}td:last-child{text-align:right}
 ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
-.note{font-size:11px;color:var(--muted)}
+.note{font-size:12px;color:#9aa4b2;line-height:1.45}
 #mbar{display:none}
+#actcard{border:2px solid #333}#actcard.go-buy{border-color:var(--up)}#actcard.go-sell{border-color:var(--down)}#actcard.go-prep{border-color:var(--gold)}
+#actdetail table td{font-size:15px}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1115}}
 @media(max-width:700px){
   header{padding:10px 16px;gap:6px}h1{font-size:16px;width:100%}#price{font-size:16px}
@@ -37,7 +39,8 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
   main{padding:8px 16px 90px}
   #chart{height:340px}#rsi{height:90px}
   input,select,button{font-size:16px;min-height:40px}
-  #mbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:9;gap:10px;align-items:center;justify-content:space-between;
+  #mbar.show{display:flex}
+  #mbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9;gap:10px;align-items:center;justify-content:space-between;
     padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(24,27,34,.97);border-top:1px solid #333;backdrop-filter:blur(6px)}
   #mbar b{font-size:20px}#mbar button{min-height:40px}
 }
@@ -48,10 +51,10 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
 <header>
   <h1>🟡 Altın Analiz Ajanı</h1>
   <select id="tf">
-    <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h">1 saat</option>
-    <option value="4h" selected>4 saat</option><option value="1d">Günlük</option>
+    <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h" selected>1 saat</option>
+    <option value="4h">4 saat</option><option value="1d">Günlük</option>
   </select>
-  <select id="mode"><option value="normal">Normal mod</option><option value="scalp">⚡ Scalp (kısa vade)</option><option value="isabet">🎯 Yüksek isabet (1 saat)</option><option value="dengeli">📈 Dengeli (1 saat)</option></select>
+  <select id="mode"><option value="dengeli" selected>📈 Dengeli (1 saat) – önerilen</option><option value="normal">Normal mod</option><option value="scalp">⚡ Scalp (kısa vade)</option><option value="isabet">🎯 Yüksek isabet (1 saat)</option></select>
   <button id="refresh">Yenile</button>
   <span id="src" class="note"></span>
   <span id="live" class="note"></span>
@@ -64,9 +67,8 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <p class="note">Mum: XAU/USD karşılığı (PAXG/USDT, 1 PAXG = 1 ons altın). Turuncu: EMA20 (scalp: EMA9), mavi: EMA50 (scalp: EMA21), mor: SMA200, gri: Bollinger. Oklar: geçmiş al/sat sinyalleri. Şeffaf mumlar: ajanın öngördüğü sanal mumlar (ana senaryo); kırmızı kesikli çizgi: alternatif senaryo.</p>
   </section>
   <aside>
+    <div class="card" id="actcard"><h2>Şimdi ne yapmalı?</h2><div id="action" class="big">…</div><div id="actdetail"></div><p id="actnote" class="note"></p><p id="modeinfo" class="note" style="border-top:1px solid #2a2f3a;padding-top:6px"></p></div>
     <div class="card"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
-    <div class="card"><h2>İleriye dönük senaryo</h2><ul id="scen"></ul></div>
-    <div class="card"><h2>Tespit edilen olaylar</h2><ul id="events"></ul></div>
     <div class="card"><h2>İşlem planı</h2><table id="plan"></table></div>
     <div class="card"><h2>Pip &amp; lot hesaplayıcı</h2>
       <table>
@@ -77,7 +79,11 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
       </table>
       <table id="calc" style="margin-top:6px"></table>
       <p class="note">Altında 1 standart lot = 100 ons. Fiyat 1$ hareket ederse 1 lotta ±100$ olur. Aracı kurumunuzun pip tanımını kontrol edin.</p></div>
+    <div class="card"><h2>İleriye dönük senaryo</h2><ul id="scen"></ul></div>
+    <div class="card"><h2>Tespit edilen olaylar</h2><ul id="events"></ul></div>
     <div class="card"><h2>Göstergeler</h2><table id="ind"></table></div>
+    <div class="card"><h2>Sinyal günlüğü (bu cihazda)</h2><div id="jsum" class="note"></div><table id="journal"></table>
+      <p class="note">Uygulama açıkken kapanan her mumda oluşan işlem sinyali (giriş: sonraki mumun açılışı) kaydedilir ve sonradan stop/hedefe değip değmediği otomatik işaretlenir. Gerçek performansı buradan takip edin. <button id="jcsv" style="font-size:11px;padding:2px 8px;min-height:0">CSV indir</button> <button id="jclear" style="font-size:11px;padding:2px 8px;min-height:0">Temizle</button></p></div>
     <div class="card"><h2>Geriye dönük test</h2><table id="bt"></table><div id="btcurve"></div><p id="btnote" class="note"></p>
       <p class="note">Kural: skor ≥ +4 → long, ≤ −4 → short, yatay piyasada (ADX düşük) yalnızca likidite avından sonra, <b>yalnızca üst zaman dilimi trendi aynı yöndeyse</b> (scalp modunda ayrıca sadece 10:00–20:00 TSİ, Londra+New York seansı). Mum kapanışında giriş, zarar-durdur (−1R) veya Hedef 1'de çıkış. Spread+komisyon her işlemden düşülür. Grafikte sarı oklar test girişleri, yeşil/kırmızı noktalar çıkışlardır. “Filtresiz eski kural” satırı, filtreler olmadan aynı dönemin sonucunu gösterir.</p></div>
     <div class="card"><h2>Gerekçeler</h2><ul id="why"></ul></div>
@@ -106,6 +112,7 @@ Not: Bu sonuçlar tek bir dönemden; gelecekte aynı başarıyı garanti etmez. 
 <script src="smc.js"></script>
 <script>
 const $ = id => document.getElementById(id);
+const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
 const fmt = v => v == null || isNaN(v) ? '—' : v.toLocaleString('tr-TR', {maximumFractionDigits: 2});
 
 // ---------- Veri ----------
@@ -299,8 +306,17 @@ chart.timeScale().subscribeVisibleLogicalRangeChange(r => r && rsiChart.timeScal
 
 // ---------- Geriye dönük test ----------
 let btMarks = [];
+// İşlem açma kuralı – hem canlı karar hem geriye dönük test aynı fonksiyonu kullanır
+function entryCheck(A, filt = true) {
+  const PR = preset(), dir = Math.sign(A.score);
+  if (Math.abs(A.score) < STRONG || !dir) return {ok: false, why: `Sinyal yeterince güçlü değil (skor ${A.score.toFixed(1)}, gereken ±${STRONG})`};
+  if (filt && htf.length && (!PR || PR.htf) && A.htfT !== dir) return {ok: false, why: `Üst zaman dilimi trendi ${A.htfT > 0 ? 'yukarı' : A.htfT < 0 ? 'aşağı' : 'yatay'} – sinyalle uyumsuz`};
+  if (filt && (PR ? PR.sess : $('mode').value === 'scalp')) { const h = new Date(A.barClose * 1000).getUTCHours(); if (h < 7 || h >= 17) return {ok: false, why: 'İşlem saatleri dışında (10:00–20:00 TSİ)'}; }
+  if (filt && (!PR || PR.reg) && A.i2.regime === 'range' && !A.sm.sweep) return {ok: false, why: 'Yatay piyasa (ADX düşük) ve likidite avı yok'};
+  return {ok: true, dir};
+}
 function backtest(d, filt = true) {
-  const PR = preset(), cost = +$('spread').value || 0, useHtf = filt && htf.length > 0 && (!PR || PR.htf), sess = filt && (PR ? PR.sess : $('mode').value === 'scalp');
+  const PR = preset(), cost = +$('spread').value || 0;
   const trades = []; let pos = null, eq = 0, peak = 0, dd = 0; const curve = [0];
   for (let i = 250; i < d.length; i++) {
     const k = d[i];
@@ -316,11 +332,7 @@ function backtest(d, filt = true) {
       continue;
     }
     const A = analyze(d.slice(0, i + 1));
-    const dir = Math.sign(A.score);
-    if (useHtf && A.htfT !== dir) continue; // yalnızca üst trend yönünde
-    if (sess) { const h = new Date(A.barClose * 1000).getUTCHours(); if (h < 7 || h >= 17) continue; } // Londra + New York seansı
-    if (filt && (!PR || PR.reg) && A.i2.regime === 'range' && !A.sm.sweep) continue; // yatay piyasada yalnızca likidite avı sonrası
-    if (Math.abs(A.score) >= STRONG) {
+    if (entryCheck(A, filt).ok) {
       // giriş: sinyal mumu kapandıktan sonraki mumun açılışı (gerçekçi dolum)
       const nx = d[i + 1]; if (!nx) { pos = {pending: true, long: A.long, entry: A.price}; break; }
       const entry = nx.open, risk = Math.abs(entry - A.stop);
@@ -337,14 +349,13 @@ function backtest(d, filt = true) {
   return {trades, n: trades.length, win: trades.length ? wins.length / trades.length * 100 : 0, total: eq, pf: gl ? gw / gl : Infinity, dd, curve, open: pos};
 }
 function showBacktest(B, base) {
-  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
   const W = 300, H = 60, mn = Math.min(...B.curve), mx = Math.max(...B.curve, mn + 1);
   const pts = B.curve.map((v, i) => `${(i / Math.max(1, B.curve.length - 1) * W).toFixed(1)},${(H - (v - mn) / (mx - mn) * H).toFixed(1)}`).join(' ');
   $('bt').innerHTML = row('İşlem sayısı', B.n) + row('Kazanma oranı', '%' + B.win.toFixed(0)) +
     row('Toplam sonuç', `<b class="${B.total >= 0 ? 'buy' : 'sell'}">${B.total >= 0 ? '+' : ''}${B.total.toFixed(1)}R</b>`) +
     row('Kâr faktörü', isFinite(B.pf) ? B.pf.toFixed(2) : '∞') + row('Maks. düşüş', B.dd.toFixed(1) + 'R') +
     row('Filtresiz eski kural', `${base.n} işlem, ${base.total >= 0 ? '+' : ''}${base.total.toFixed(1)}R`) +
-    row('Açık pozisyon', B.open ? (B.open.pending ? 'Yeni sinyal: ' : '') + (B.open.long ? 'Long @ ' : 'Short @ ') + fmt(B.open.entry) : 'Yok');
+    row('Test sisteminin açık işlemi', B.open ? (B.open.pending ? 'Yeni sinyal: ' : '') + (B.open.long ? 'Long @ ' : 'Short @ ') + fmt(B.open.entry) : 'Yok');
   $('btcurve').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}"><polyline fill="none" stroke="#d4af37" stroke-width="2" points="${pts}"/></svg>`;
   $('btnote').textContent = B.n < 10 ? 'Az işlem var; sonuç istatistiksel olarak güvenilir değil. Günlük/4 saatlik grafikte deneyin.' :
     B.total > 0 ? 'Bu dönemde strateji kârlı. Geçmiş performans geleceği garanti etmez.' : 'Bu dönemde strateji zararda – bu piyasa koşulunda sinyallere temkinli yaklaşın.';
@@ -362,11 +373,10 @@ function calc() {
   ['bal', 'riskp', 'pipsize'].forEach(id => store.set('altin_' + id, $(id).value));
   const riskUsd = bal * rp / 100, stopPips = lastA.risk / ps, pipVal = ps * 100; // lot başına pip değeri
   const lot = riskUsd / (stopPips * pipVal);
-  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
   $('calc').innerHTML = row('Riske edilen', '$' + fmt(riskUsd)) + row('Stop mesafesi', fmt(stopPips) + ' pip') +
     row('1 lot için pip değeri', '$' + fmt(pipVal)) + row('<b>Önerilen lot</b>', lot < 0.01 ? `<b class="sell">${lot.toFixed(3)} (min. 0,01 lot – bakiye/risk yetersiz)</b>` : `<b class="hold">${lot.toFixed(2)}</b>`) +
     row('Hedef 1 kârı', '$' + fmt(Math.abs(lastA.tp1 - lastA.price) / ps * pipVal * lot)) +
-    row('Spread / risk', (() => { const q = (+$('spread').value || 0) / lastA.risk * 100; return `<b class="${q > 25 ? 'sell' : 'buy'}">%${q.toFixed(0)}${q > 25 ? ' – maliyet çok yüksek, daha büyük zaman dilimi seçin' : ''}</b>`; })()) +
+    row('Maliyet / risk', (() => { const q = (+$('spread').value || 0) / lastA.risk * 100; return `<b class="${q > 25 ? 'sell' : 'buy'}">%${q.toFixed(0)}${q > 25 ? ' – maliyet çok yüksek, daha büyük zaman dilimi seçin' : ''}</b>`; })()) +
     row('Hedef 2 kârı', '$' + fmt(Math.abs(lastA.tp2 - lastA.price) / ps * pipVal * lot));
 }
 function render() {
@@ -379,7 +389,8 @@ function render() {
   $('scen').innerHTML = `<li>🔮 <b>Ana senaryo:</b> ${A.scen}</li><li>⚠️ ${A.alt}</li>`;
   $('events').innerHTML = A.events.map(e => `<li>${e}</li>`).join('');
   priceLines.forEach(p => candles.removePriceLine(p));
-  priceLines = [
+  const few = innerWidth < 600; // telefonda yalnızca temel seviyeler
+  priceLines = few ? [candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}), candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef'})] : [
     ...A.sup.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#26a69a', lineStyle: 2, title: 'Destek'})),
     ...A.res.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#ef5350', lineStyle: 2, title: 'Direnç'})),
     candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}),
@@ -393,11 +404,49 @@ function render() {
   showPrice(A.price);
   const cls = A.verdict.includes('AL') ? 'buy' : A.verdict.includes('SAT') ? 'sell' : 'hold';
   $('verdict').className = 'big ' + cls; $('verdict').textContent = A.verdict;
-  $('mverdict').className = 'big ' + cls; $('mverdict').textContent = A.verdict;
-  $('mplan').textContent = `Stop ${fmt(A.stop)} · H1 ${fmt(A.tp1)}`;
-  signalAlert(A);
+  // Kapanmış mumun analizi (yeni mum başladığında bir kez) – "İŞLEM AÇ" yalnızca buna dayanır
+  const bar = d[d.length - 1];
+  if (closedCache.t !== bar.time || closedCache.n !== d.length || closedCache.m !== $('mode').value) {
+    const P = analyze(d.slice(0, -1));
+    closedCache = {t: bar.time, n: d.length, m: $('mode').value, P, E: entryCheck(P), open: bar.open};
+  }
+  const P = closedCache.P, EC = closedCache.E, EF = entryCheck(A), fakes = fakeChecks(d, A);
+  const closeIn = Math.max(0, Math.round((A.barClose - Date.now() / 1000) / 60));
+  let state = 'wait', S = A;
+  if (EC.ok) {
+    const sg = P.long ? 1 : -1, o = closedCache.open, dS = Math.abs(P.price - P.stop), dT = Math.abs(P.tp1 - P.price);
+    S = {long: P.long, entry: o, stop: o - sg * dS, tp1: o + sg * dT, risk: dS};
+    // fiyat girişten riskin yarısından fazla uzaklaştıysa fırsat kaçmış sayılır
+    state = Math.abs(A.price - o) > 0.5 * dS || (sg > 0 ? A.price <= S.stop : A.price >= S.stop) ? 'missed' : 'go';
+  } else if (EF.ok) { state = 'prep'; S = {long: A.long, entry: A.price, stop: A.stop, tp1: A.tp1, risk: A.risk}; }
+  $('actcard').className = 'card ' + (state === 'go' ? (S.long ? 'go-buy' : 'go-sell') : state === 'prep' ? 'go-prep' : '');
+  const lot = lotFor(S), dirTxt = S.long ? 'ALIM' : 'SATIM', fakeHtml = fakes.length ? `<ul style="margin:6px 0">${fakes.map(f => `<li>${f}</li>`).join('')}</ul>` : '';
+  if (state === 'go') {
+    $('action').innerHTML = `<span class="${S.long ? 'buy' : 'sell'}">✅ ${dirTxt} AÇ (teyitli)</span>`;
+    $('actdetail').innerHTML = `<table>${row('Giriş (mum açılışı)', fmt(S.entry))}${row('Şu anki fiyat', fmt(A.price))}${row('Zarar-durdur', fmt(S.stop))}${row('Hedef', fmt(S.tp1))}${row('Lot', lot)}</table>` +
+      (lot === '<0,01' ? '<p class="sell" style="margin:4px 0">⚠️ Bu bakiye ve risk ile en küçük lot (0,01) bile riskinizi aşar – işlem açmayın veya bakiyeyi/riski güncelleyin.</p>' : '') + fakeHtml;
+    $('actnote').textContent = 'Sinyal kapanmış mumla teyit edildi. Stop ve hedefi emirle birlikte koyun; fiyat girişten uzaklaşırsa kovalamayın.';
+  } else if (state === 'missed') {
+    $('action').innerHTML = '<span class="hold">⏭ FIRSAT KAÇTI – BEKLE</span>';
+    $('actdetail').innerHTML = `<p style="margin:4px 0;font-size:14px">${dirTxt} sinyali vardı (giriş ${fmt(S.entry)}) ama fiyat çok uzaklaştı (${fmt(A.price)}). Kovalamak risk/ödülü bozar.</p>` + fakeHtml;
+    $('actnote').textContent = `Sonraki mum kapanışı ≈${closeIn} dk sonra.`;
+  } else if (state === 'prep') {
+    $('action').innerHTML = `<span class="hold">🟡 HAZIRLAN: ${dirTxt} sinyali oluşuyor</span>`;
+    $('actdetail').innerHTML = `<table>${row('Olası giriş', '≈ ' + fmt(S.entry))}${row('Olası stop', fmt(S.stop))}${row('Olası hedef', fmt(S.tp1))}${row('Lot', lot)}</table>` + fakeHtml;
+    $('actnote').textContent = `HENÜZ GİRMEYİN – mum kapanmadı, sinyal sahte çıkabilir. Kapanışta (≈${closeIn} dk) teyit gelirse "✅ ${dirTxt} AÇ" yazacak.`;
+  } else {
+    $('action').innerHTML = '<span class="hold">⏸ BEKLE</span>';
+    $('actdetail').innerHTML = `<p style="margin:4px 0;font-size:14px">${EF.why}</p>` + fakeHtml;
+    $('actnote').textContent = `Ajanın genel görüşü: ${A.verdict}. Sonraki mum kapanışı ≈${closeIn} dk sonra.`;
+  }
+  const MT = {go: `<span class="${S.long ? 'buy' : 'sell'}">${dirTxt} AÇ</span>`, prep: `<span class="hold">HAZIRLAN: ${dirTxt}</span>`, missed: '<span class="hold">KAÇTI</span>', wait: '<span class="hold">BEKLE</span>'};
+  $('mverdict').innerHTML = MT[state];
+  $('mplan').textContent = state === 'go' || state === 'prep' ? `Stop ${fmt(S.stop)} · Hedef ${fmt(S.tp1)} · ${lot} lot` : (fakes[0] || EF.why);
+  const MI = {dengeli: '📈 Dengeli: 1 saatlik, testte en kârlı mod (4 ay: %54 kazanma, +24R). Önerilen.', isabet: '🎯 Yüksek isabet: sık kazanır ama kazançlar küçük (4 ay: %72 kazanma, +7,6R).', normal: 'Normal: genel analiz modu – testte tutarlı kâr göstermedi, işlem için 📈 Dengeli önerilir.', scalp: '⚡ Scalp: 1–15 dk testlerinde zarar etti; sık işlem için önerilmez.'};
+  $('modeinfo').textContent = MI[$('mode').value] || '';
+  journalUpdate(A, EC);
+  signalAlert(state, S, A);
   $('score').textContent = `Skor: ${A.score.toFixed(1)} (−14 … +14) · ${A.i2.regime === 'trend' ? 'Trend piyasası' : 'Yatay piyasa'}, ADX ${A.i2.adx != null ? A.i2.adx.toFixed(0) : '—'}`;
-  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
   $('plan').innerHTML = row('Yön', A.long ? '📈 Alım (long)' : '📉 Satım (short)') + row('Giriş', fmt(A.price)) +
     row('Zarar-durdur', `${fmt(A.stop)} <span class="note">(${pips(A.stop - A.price)} pip)</span>`) +
     row('Hedef 1', `${fmt(A.tp1)} <span class="note">(${pips(A.tp1 - A.price)} pip)</span>`) +
@@ -416,23 +465,78 @@ function render() {
     `🌍 <b>Temel etkenler:</b> Fed faiz indirimi, zayıf dolar (DXY↓), düşen reel faizler, jeopolitik risk ve merkez bankası alımları altını yükseltir; tersi düşürür.`,
   ].map(x => `<li>${x}</li>`).join('');
 }
+// ---------- Sahte mum / tuzak kontrolleri ----------
+let closedCache = {};
+function fakeChecks(d, A) {
+  const out = [], k = d[d.length - 1], p = d[d.length - 2], at = A.atr, rng = k.high - k.low || 1e-9;
+  const up = k.high - Math.max(k.open, k.close), lo = Math.min(k.open, k.close) - k.low;
+  if (up / rng > 0.6 && rng > 0.5 * at) out.push('🪤 Uzun üst fitil: yükseliş reddediliyor – alım sinyali sahte olabilir');
+  if (lo / rng > 0.6 && rng > 0.5 * at) out.push('🪤 Uzun alt fitil: düşüş reddediliyor – satım sinyali sahte olabilir');
+  if (rng > 2.5 * at) out.push(`⚡ Anormal büyük mum (${(rng / at).toFixed(1)} ATR) – haber/likidite hareketi, geri dönüş riski yüksek`);
+  const r0 = A.res[0], s0 = A.sup[0];
+  if (r0 && k.high > r0 && k.close < r0) out.push(`🚫 Sahte kırılım riski: ${fmt(r0)} direnci fitille aşıldı ama fiyat altında`);
+  if (s0 && k.low < s0 && k.close > s0) out.push(`🚫 Sahte kırılım riski: ${fmt(s0)} desteği fitille kırıldı ama fiyat üstünde`);
+  if (p && A.sm.sweep) out.push(A.sm.sweep.dir > 0 ? '🎯 Likidite avı (dipteki stoplar alındı) – düşüş kırılımı sahte, yukarı dönüş olası' : '🎯 Likidite avı (tepedeki stoplar alındı) – yükseliş kırılımı sahte, aşağı dönüş olası');
+  return out;
+}
+
+// ---------- Sinyal günlüğü ----------
+function lotFor(A) { const ps = pipSize(), l = (+$('bal').value * +$('riskp').value / 100) / (A.risk / ps * ps * 100); return l < 0.01 ? '<0,01' : l.toFixed(2); }
+let journal = [], lastJBar = null;
+try { journal = JSON.parse(localStorage.getItem('altin_journal') || '[]'); } catch {}
+function journalSave() { try { localStorage.setItem('altin_journal', JSON.stringify(journal.slice(-200))); } catch {} }
+function journalUpdate(A, E) {
+  const bar = data[data.length - 1], prev = data[data.length - 2], tf = $('tf').value, mode = $('mode').value;
+  // Kayıt yalnızca KAPANMIŞ mumun sinyaliyle yapılır (geriye dönük testteki gibi): giriş = yeni mumun açılışı
+  if (prev && lastJBar !== bar.time) {
+    lastJBar = bar.time;
+    const P = closedCache.P, EP = closedCache.E;
+    if (EP.ok && !journal.some(j => j.bar === bar.time && j.tf === tf && j.mode === mode)) {
+      const e = bar.open, dS = Math.abs(P.price - P.stop), dT = Math.abs(P.tp1 - P.price), sg = P.long ? 1 : -1;
+      journal.push({bar: bar.time, tf, mode, long: P.long, entry: e, stop: e - sg * dS, tp: e + sg * dT, res: null});
+    }
+  }
+  for (const j of journal) if (j.res == null && j.tf === tf) {
+    for (const k of data) if (k.time >= j.bar) {
+      if (j.long ? k.low <= j.stop : k.high >= j.stop) { j.res = -1; break; }
+      if (j.long ? k.high >= j.tp : k.low <= j.tp) { j.res = Math.abs(j.tp - j.entry) / Math.abs(j.entry - j.stop); break; }
+    }
+  }
+  journalSave();
+  const done = journal.filter(j => j.res != null), w = done.filter(j => j.res > 0).length, tot = done.reduce((a, j) => a + j.res, 0);
+  $('jsum').textContent = journal.length ? `${journal.length} sinyal · sonuçlanan ${done.length} · kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'} · toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R` : 'Henüz sinyal yok.';
+  const ML = {normal: 'Normal', scalp: 'Scalp', isabet: '🎯', dengeli: '📈'};
+  $('journal').innerHTML = journal.slice(-8).reverse().map(j => row(
+    `${new Date(j.bar * 1000).toLocaleString('tr-TR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})} ${ML[j.mode] || j.mode} ${j.tf} <b class="${j.long ? 'buy' : 'sell'}">${j.long ? 'AL' : 'SAT'}</b> @${fmt(j.entry)}`,
+    j.res == null ? '⏳ açık' : j.res > 0 ? `<b class="buy">✓ +${j.res.toFixed(1)}R</b>` : '<b class="sell">✗ −1R</b>')).join('');
+}
+$('jcsv').onclick = () => {
+  const csv = 'tarih,mod,zaman,yon,giris,stop,hedef,sonuc_R\n' + journal.map(j => [new Date(j.bar * 1000).toISOString(), j.mode, j.tf, j.long ? 'AL' : 'SAT', j.entry, j.stop, j.tp, j.res ?? ''].join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'})); a.download = 'altin-sinyal-gunlugu.csv'; a.click();
+};
+$('jclear').onclick = () => { if (confirm('Sinyal günlüğü silinsin mi?')) { journal = []; journalSave(); render(); } };
+
 // ---------- Mobil: sinyal değişince titreşim ve bildirim ----------
 let lastVerdict = null, notifyOn = false;
 try { notifyOn = localStorage.getItem('altin_notify') === '1'; } catch {}
-function signalAlert(A) {
-  if (lastVerdict && A.verdict !== lastVerdict && notifyOn) {
-    const msg = `${A.verdict} – ${fmt(A.price)}$ · Stop ${fmt(A.stop)} · Hedef ${fmt(A.tp1)}`;
-    try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch {}
-    try { if (window.Notification && Notification.permission === 'granted') new Notification('Altın sinyali: ' + A.verdict, {body: msg, icon: 'icon.svg'}); } catch {}
+function signalAlert(state, S, A) {
+  const key = state + (S.long ? 'L' : 'S');
+  if (lastVerdict && key !== lastVerdict && (state === 'go' || state === 'prep') && notifyOn) {
+    const dir = S.long ? 'ALIM' : 'SATIM';
+    const title = state === 'go' ? `✅ Altın: ${dir} AÇ (teyitli)` : `🟡 Altın: ${dir} sinyali oluşuyor – hazırlan`;
+    const msg = `${fmt(A.price)}$ · Stop ${fmt(S.stop)} · Hedef ${fmt(S.tp1)}` + (state === 'prep' ? ' · Mum kapanışını bekleyin' : '');
+    try { navigator.vibrate && navigator.vibrate(state === 'go' ? [300, 100, 300, 100, 300] : [150]); } catch {}
+    try { if (window.Notification && Notification.permission === 'granted') new Notification(title, {body: msg, icon: 'icon.svg'}); } catch {}
   }
-  lastVerdict = A.verdict;
+  lastVerdict = key;
 }
-function notifyLabel() { $('notify').textContent = notifyOn ? '🔔 Açık' : '🔕 Kapalı'; }
+function notifyLabel() { $('notify').textContent = notifyOn ? '🔔 Bildirim açık' : '🔕 Bildirim kapalı'; }
 $('notify').onclick = async () => {
   notifyOn = !notifyOn;
   if (notifyOn && window.Notification && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch {} }
   try { localStorage.setItem('altin_notify', notifyOn ? '1' : '0'); } catch {}
   notifyLabel();
+try { new IntersectionObserver(([e]) => $('mbar').classList.toggle('show', !e.isIntersecting)).observe($('actcard')); } catch { $('mbar').classList.add('show'); }
 };
 notifyLabel();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -473,6 +577,8 @@ setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); 
 ['spread'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).onchange = () => { store.set('altin_' + id, $(id).value); showBacktest(backtest(data), backtest(data, false)); render(); }; });
 ['bal', 'riskp', 'pipsize'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).oninput = () => { calc(); render(); }; });
 $('mode').onchange = () => { const m = $('mode').value; if (PRESETS[m]) $('tf').value = '1h'; else if (m === 'scalp' && ['4h', '1d', '1h'].includes($('tf').value)) $('tf').value = '5m'; run(); };
+try { const m = localStorage.getItem('altin_mode'), t = localStorage.getItem('altin_tf'); if (m && $('mode').querySelector(`option[value="${m}"]`)) $('mode').value = m; if (t) $('tf').value = t; } catch {}
+['mode', 'tf'].forEach(id => $(id).addEventListener('change', () => { try { localStorage.setItem('altin_' + id, $(id).value); } catch {} }));
 $('refresh').onclick = run; $('tf').onchange = run;
 run();
 </script>
