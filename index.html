@@ -12,37 +12,88 @@
 <link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon.svg">
 <title>Altın Analiz Ajanı</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
-:root{--bg:#0f1115;--panel:#181b22;--text:#e6e6e6;--muted:#8a90a0;--gold:#d4af37;--up:#26a69a;--down:#ef5350}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
-header{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #262a33}
-h1{font-size:18px;margin:0 12px 0 0;color:var(--gold)}
-input{width:110px;text-align:right}input,select,button{background:var(--panel);color:var(--text);border:1px solid #333;border-radius:6px;padding:6px 10px}
-#price,#mprice{color:#ff4fa3}#price{font-weight:700;font-size:18px;margin-left:auto}
-main{display:grid;grid-template-columns:1fr 340px;gap:12px;padding:12px 16px}
-@media(max-width:900px){main{grid-template-columns:1fr}}
-#chart{height:460px}#rsi{height:120px;margin-top:6px}
-.card{background:var(--panel);border-radius:8px;padding:12px;margin-bottom:12px}
-.card h2{font-size:14px;margin:0 0 8px;color:var(--muted);text-transform:uppercase}
-.big{font-size:26px;font-weight:800}.buy{color:var(--up)}.sell{color:var(--down)}.hold{color:var(--gold)}
-table{width:100%;font-size:13px;border-collapse:collapse}td{padding:3px 0}td:last-child{text-align:right}
-ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
-.note{font-size:12px;color:#9aa4b2;line-height:1.45}
+:root{--bg:#0b0d12;--bg2:#10131a;--panel:#151922;--panel2:#1b202b;--line:#252b38;--line2:#323a4a;--text:#e9ecf2;--muted:#9aa3b5;--dim:#7d869a;
+--gold:#e6c35c;--gold2:#b8902f;--up:#2ec4a5;--down:#ff5d6c;--pink:#ff4fa3;--r:14px;--sh:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.28)}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:radial-gradient(1200px 500px at 70% -200px,rgba(230,195,92,.07),transparent 60%),var(--bg);background-attachment:fixed;color:var(--text);
+font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+header{position:sticky;top:0;z-index:20;background:rgba(11,13,18,.88);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);
+padding:calc(12px + env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 12px max(24px, env(safe-area-inset-left));display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:1px solid var(--line)}
+h1{font-size:17px;font-weight:700;letter-spacing:-.01em;margin:0 14px 0 0;background:linear-gradient(90deg,#f5dc8c,var(--gold2));-webkit-background-clip:text;background-clip:text;color:transparent}
+input,select,button{font:inherit;font-size:14px;background:var(--panel2);color:var(--text);border:1px solid var(--line2);border-radius:10px;padding:8px 12px;min-height:38px;transition:border-color .15s,background .15s,box-shadow .15s}
+input{width:110px;text-align:right;font-variant-numeric:tabular-nums}
+select{appearance:none;-webkit-appearance:none;padding-right:32px;cursor:pointer;
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239aa3b5' stroke-width='1.6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+button{cursor:pointer;font-weight:600}
+input:hover,select:hover,button:hover{border-color:#46506a;background-color:#202634}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(230,195,92,.22)}
+#refresh{width:40px;padding:0;font-size:18px;line-height:1}
+#price,#mprice{color:var(--pink);font-variant-numeric:tabular-nums}
+#price{font-weight:800;font-size:22px;letter-spacing:-.01em;margin-left:auto;text-shadow:0 0 24px rgba(255,79,163,.25)}
+#src,#live{font-size:12px;color:var(--muted)}
+#live{padding:3px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line)}
+#live:empty,#src:empty{display:none}
+main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;padding:20px 24px;max-width:1600px;margin:0 auto;align-items:start}
+main>section{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh);min-width:0}
+@media(min-width:901px){
+  main>section{position:sticky;top:84px}
+  main>aside{max-height:calc(100vh - 104px);overflow-y:auto;position:sticky;top:84px;padding-right:6px;margin-right:-6px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+  #chart{height:min(560px,calc(100vh - 360px))!important;min-height:400px}
+}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+#chart{height:460px;border-radius:10px;overflow:hidden}#rsi{height:120px;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+section>.note{margin:12px 2px 2px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:var(--sh)}
+.card h2{font-size:11.5px;font-weight:600;letter-spacing:.08em;margin:0 0 12px;color:var(--muted);text-transform:uppercase}
+.big{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
+.buy{color:var(--up)}.sell{color:var(--down)}.hold{color:var(--gold)}
+table{width:100%;font-size:13px;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td{padding:8px 0;border-bottom:1px solid var(--line);vertical-align:middle}tr:last-child td{border-bottom:0}
+td:first-child{color:var(--muted);padding-right:10px}td:last-child{text-align:right;color:var(--text);font-weight:500}
+td:only-child{color:var(--text);text-align:left}
+ul{padding-left:18px;margin:0;font-size:13px;line-height:1.6}li{margin:3px 0}li::marker{color:var(--gold2)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.55}
+p.note{margin:10px 0 0}
 #mbar{display:none}
-#actcard{border:2px solid #333}#actcard.go-buy{border-color:var(--up)}#actcard.go-sell{border-color:var(--down)}#actcard.go-prep{border-color:var(--gold)}
-#actdetail table td{font-size:15px}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1115}}
+#actcard{position:relative;overflow:hidden;border:1px solid var(--line2);background:linear-gradient(160deg,var(--panel2),var(--panel) 60%);padding:18px}
+#actcard::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--line2)}
+#actcard #action{font-size:30px}
+#actcard.go-buy{border-color:rgba(46,196,165,.55);background:linear-gradient(160deg,rgba(46,196,165,.14),var(--panel) 65%);box-shadow:0 10px 30px rgba(46,196,165,.12)}
+#actcard.go-buy::before{background:var(--up)}
+#actcard.go-sell{border-color:rgba(255,93,108,.55);background:linear-gradient(160deg,rgba(255,93,108,.14),var(--panel) 65%);box-shadow:0 10px 30px rgba(255,93,108,.12)}
+#actcard.go-sell::before{background:var(--down)}
+#actcard.go-prep{border-color:rgba(230,195,92,.55);background:linear-gradient(160deg,rgba(230,195,92,.13),var(--panel) 65%);box-shadow:0 10px 30px rgba(230,195,92,.1)}
+#actcard.go-prep::before{background:var(--gold)}
+#actdetail{margin-top:10px}#actdetail table td{font-size:15px;padding:9px 0}
+#modeinfo{border-top:1px solid var(--line)!important;padding-top:10px!important}
+details{border-top:1px solid var(--line)}details:first-of-type{border-top:0}
+summary{list-style:none;cursor:pointer;padding:12px 26px 12px 0;position:relative;font-size:13.5px;border-radius:6px;min-height:44px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"";position:absolute;right:6px;top:50%;width:7px;height:7px;border-right:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);transform:translateY(-70%) rotate(45deg);transition:transform .2s}
+details[open]>summary::after{transform:translateY(-30%) rotate(-135deg)}
+summary:hover b{color:var(--gold)}
+details>p.note{margin:0 0 14px}
+#jcsv,#jclear{font-size:12px!important;padding:4px 10px!important;min-height:28px!important;border-radius:8px}
+aside>p.note{padding:0 4px 8px}
+b{font-weight:600;color:var(--text)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0d12}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(max-width:700px){
-  header{padding:calc(8px + env(safe-area-inset-top)) 16px 8px;gap:6px}h1{display:none}h1{font-size:16px;width:100%}#price{font-size:16px}
-  header select{flex:1;padding:10px 6px;font-size:14px;min-width:0}header button#refresh{flex:0 0 auto;padding:10px 12px}
+  header{padding:calc(10px + env(safe-area-inset-top)) 16px 10px;gap:8px}h1{display:none}#price{font-size:18px}
+  header select{flex:1;padding:10px 30px 10px 10px;font-size:15px;min-width:0}header button#refresh{flex:0 0 auto;width:44px}
   #src{display:none}#live{font-size:11px}
-  main{padding:8px 16px 90px}
+  main{padding:12px 16px 100px;gap:14px}
+  main>section{padding:10px}
   #chart{height:340px}#rsi{height:90px}
-  input,select,button{font-size:16px;min-height:40px}
+  input,select,button{font-size:16px;min-height:42px}
+  .card{padding:14px}
   #mbar.show{display:flex}
   #mbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9;gap:10px;align-items:center;justify-content:space-between;
-    padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(24,27,34,.97);border-top:1px solid #333;backdrop-filter:blur(6px)}
-  #mbar b{font-size:20px}#mbar button{min-height:40px}
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(16,19,26,.92);border-top:1px solid var(--line2);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 -8px 24px rgba(0,0,0,.35)}
+  #mbar .big{font-size:20px}#mbar b{font-size:20px;font-weight:800}#mbar button{min-height:40px;margin-top:4px;padding:6px 12px}
 }
 </style>
 </head>
