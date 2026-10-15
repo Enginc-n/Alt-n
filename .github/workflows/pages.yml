@@ -21,7 +21,7 @@ jobs:
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
         with:
           enablement: true
-      - run: mkdir _site && cp index.html manifest.json icon.svg sw.js _site/
+      - run: mkdir _site && cp index.html ind2.js smc.js manifest.json icon.svg sw.js _site/
       # upload-pages-artifact içindeki sabitlenmemiş adım yerine aynı işlemi doğrudan yapıyoruz
       - run: tar --dereference --hard-dereference -cvf artifact.tar -C _site .
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

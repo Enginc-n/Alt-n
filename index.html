@@ -79,12 +79,14 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
       <p class="note">Altında 1 standart lot = 100 ons. Fiyat 1$ hareket ederse 1 lotta ±100$ olur. Aracı kurumunuzun pip tanımını kontrol edin.</p></div>
     <div class="card"><h2>Göstergeler</h2><table id="ind"></table></div>
     <div class="card"><h2>Geriye dönük test</h2><table id="bt"></table><div id="btcurve"></div><p id="btnote" class="note"></p>
-      <p class="note">Kural: skor ≥ +3 → long, ≤ −3 → short, <b>yalnızca üst zaman dilimi trendi aynı yöndeyse</b> (scalp modunda ayrıca sadece 10:00–20:00 TSİ, Londra+New York seansı). Mum kapanışında giriş, zarar-durdur (−1R) veya Hedef 1'de çıkış. Spread+komisyon her işlemden düşülür. Grafikte sarı oklar test girişleri, yeşil/kırmızı noktalar çıkışlardır. “Filtresiz eski kural” satırı, filtreler olmadan aynı dönemin sonucunu gösterir.</p></div>
+      <p class="note">Kural: skor ≥ +4 → long, ≤ −4 → short, yatay piyasada (ADX düşük) yalnızca likidite avından sonra, <b>yalnızca üst zaman dilimi trendi aynı yöndeyse</b> (scalp modunda ayrıca sadece 10:00–20:00 TSİ, Londra+New York seansı). Mum kapanışında giriş, zarar-durdur (−1R) veya Hedef 1'de çıkış. Spread+komisyon her işlemden düşülür. Grafikte sarı oklar test girişleri, yeşil/kırmızı noktalar çıkışlardır. “Filtresiz eski kural” satırı, filtreler olmadan aynı dönemin sonucunu gösterir.</p></div>
     <div class="card"><h2>Gerekçeler</h2><ul id="why"></ul></div>
     <div class="card"><h2>Yükseliş / düşüş için ne gerekir?</h2><ul id="need"></ul></div>
     <div class="card"><h2>Teknikler – neden artar, neden düşer?</h2>
       <details><summary><b>Trend (EMA20/50, SMA200)</b></summary><p class="note">Fiyat SMA200 üzerindeyse ana trend yukarıdır; kurumlar bu çizgiyi izler. EMA20'nin EMA50'yi yukarı kesmesi kısa vadeli alıcıların güçlendiğini gösterir. Golden Cross (EMA50 ↑ SMA200) uzun vadeli boğa, Death Cross ayı sinyalidir.</p></details>
       <details><summary><b>⚡ Scalp modu (kısa vadeli kısa yükselişler)</b></summary><p class="note">1–5 dakikalık grafikte EMA9/EMA21 kesişimi ve son 3 mumun ivmesi kullanılır. Stop 1×ATR (dar), Hedef 1 = 1R, Hedef 2 = 2R: küçük ama sık kâr alınır. En iyi saatler Londra (10:00–13:00 TSİ) ve New York açılışı (15:30–18:00 TSİ); veri açıklamalarından 5 dk önce ve sonra işlem açmayın. Spread ve komisyon kısa işlemlerde kârın büyük kısmını yiyebilir – geriye dönük testteki sonuç bunları içermez.</p></details>
+      <details><summary><b>Smart Money: FVG, Order Block, likidite avı</b></summary><p class="note">FVG (fiyat boşluğu): üç mumluk sert harekette oluşan dolmamış boşluk; fiyat çoğu zaman buraya geri döner. Order Block: sert hareketten önceki son ters mum, kurumların emir bıraktığı bölge. Likidite avı: fiyat önceki tepe/dibin stoplarını tetikleyip geri döner – güçlü dönüş sinyalidir. BOS trend devamı, CHoCH trend değişimi kırılımıdır.</p></details>
+      <details><summary><b>ADX, Ichimoku, Stokastik RSI, Fibonacci</b></summary><p class="note">ADX trendin gücünü ölçer: 25 üstü trend, 20 altı yatay piyasa. Ichimoku bulutunun üstü boğa, altı ayı bölgesidir. Stokastik RSI 20 altından yukarı dönünce alım, 80 üstünden aşağı dönünce satım işaretidir. Fibonacci 0,5–0,618 “altın cep”, geri çekilmelerde en sık dönüş bölgesidir.</p></details>
       <details><summary><b>RSI (Göreceli Güç)</b></summary><p class="note">0–100 arası ivme ölçer. 70 üstü aşırı alım (kâr satışı gelebilir), 30 altı aşırı satım (tepki alımı gelebilir). Fiyat yeni dip yaparken RSI yapmıyorsa (pozitif uyumsuzluk) düşüş gücünü kaybediyor demektir.</p></details>
       <details><summary><b>MACD</b></summary><p class="note">12 ve 26 dönemlik EMA farkı. Histogram sıfırı yukarı keserse momentum alıcılara, aşağı keserse satıcılara geçer.</p></details>
       <details><summary><b>Bollinger Bantları</b></summary><p class="note">Ortalama ±2 standart sapma. Bantlar daralınca (sıkışma) volatilite birikir ve genelde sert bir kırılım gelir. Bant dışı kapanışlar aşırı uzamayı gösterir.</p></details>
@@ -96,6 +98,8 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <p class="note">⚠️ Bu araç teknik analiz üretir, yatırım tavsiyesi değildir. Hiçbir yazılım fiyatı yükseltemez ya da düşüremez; yalnızca olasılıkları değerlendirir. Her işlemde zarar-durdur kullanın.</p>
   </aside>
 </main>
+<script src="ind2.js"></script>
+<script src="smc.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const fmt = v => v == null || isNaN(v) ? '—' : v.toLocaleString('tr-TR', {maximumFractionDigits: 2});
@@ -168,6 +172,7 @@ function levels(d, w = 5) {
 }
 
 // ---------- Ajan ----------
+const STRONG = 4;
 function analyze(d) {
   const c = d.map(k => k.close), L = c.length - 1, price = c[L];
   const SC = $('mode').value === 'scalp', nF = SC ? 9 : 20, nS = SC ? 21 : 50;
@@ -194,7 +199,10 @@ function analyze(d) {
   }
   const barClose = d[L].time + (TF_SEC[$('tf').value] || 0), htfT = htf.length ? htfTrendAt(barClose) : 0;
   if (htf.length) add(htfT * 2, `Üst zaman dilimi (${HTF[$('tf').value]}) trendi: ${htfT > 0 ? 'YUKARI' : htfT < 0 ? 'AŞAĞI' : 'yatay'}`);
-  const verdict = score >= 3 ? 'GÜÇLÜ AL' : score >= 1 ? 'AL' : score <= -3 ? 'GÜÇLÜ SAT' : score <= -1 ? 'SAT' : 'BEKLE';
+  // Uzman modülleri: Smart Money (FVG, order block, likidite avı, BOS/CHoCH) ve ek göstergeler (ADX, Ichimoku, StochRSI, Fibonacci)
+  const sm = smcSignal(d, a), i2 = ind2Signal(d);
+  score += sm.score + i2.score; why.push(...sm.reasons, ...i2.reasons);
+  const verdict = score >= STRONG ? 'GÜÇLÜ AL' : score >= 1.5 ? 'AL' : score <= -STRONG ? 'GÜÇLÜ SAT' : score <= -1.5 ? 'SAT' : 'BEKLE';
   const long = score >= 0, A = a[L];
   const stop = SC ? (long ? price - A : price + A) : long ? Math.min(price - 1.5 * A, (sup[0] ?? price) - 0.3 * A) : Math.max(price + 1.5 * A, (res[0] ?? price) + 0.3 * A);
   const risk = Math.abs(price - stop);
@@ -256,7 +264,7 @@ function analyze(d) {
   if (sup[0] && price - sup[0] < 0.3 * A) events.push(`🎯 KRİTİK: fiyat ${fmt(sup[0])} desteğinde – tutarsa dönüş, kırılırsa stop avı ile hızlı düşüş`);
   if (!events.length) events.push('Son mumda belirgin bir formasyon yok.');
 
-  return {htfT, barClose, ghost, altPath, scen, alt, events, price, score, verdict, why, long, stop, tp1, tp2, risk, sup, res, e20, e50, s200, r, bb, macd: macd[L], hist: hist[L], atr: A, marks};
+  return {sm, i2, htfT, barClose, ghost, altPath, scen, alt, events, price, score, verdict, why, long, stop, tp1, tp2, risk, sup, res, e20, e50, s200, r, bb, macd: macd[L], hist: hist[L], atr: A, marks};
 }
 
 // ---------- Çizim ----------
@@ -294,7 +302,8 @@ function backtest(d, filt = true) {
     const dir = Math.sign(A.score);
     if (useHtf && A.htfT !== dir) continue; // yalnızca üst trend yönünde
     if (sess) { const h = new Date(A.barClose * 1000).getUTCHours(); if (h < 7 || h >= 17) continue; } // Londra + New York seansı
-    if (Math.abs(A.score) >= 3) {
+    if (filt && A.i2.regime === 'range' && !A.sm.sweep) continue; // yatay piyasada yalnızca likidite avı sonrası
+    if (Math.abs(A.score) >= STRONG) {
       // giriş: sinyal mumu kapandıktan sonraki mumun açılışı (gerçekçi dolum)
       const nx = d[i + 1]; if (!nx) { pos = {pending: true, long: A.long, entry: A.price}; break; }
       const entry = nx.open, risk = Math.abs(entry - A.stop);
@@ -358,6 +367,10 @@ function render() {
     ...A.res.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#ef5350', lineStyle: 2, title: 'Direnç'})),
     candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}),
     candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef 1'}),
+    ...A.sm.zones.slice(0, 3).flatMap(z => [
+      candles.createPriceLine({price: z.top, color: z.dir > 0 ? 'rgba(38,166,154,.7)' : 'rgba(239,83,80,.7)', lineStyle: 1, title: z.label + (z.dir > 0 ? ' ↑' : ' ↓')}),
+      candles.createPriceLine({price: z.bottom, color: z.dir > 0 ? 'rgba(38,166,154,.7)' : 'rgba(239,83,80,.7)', lineStyle: 1, title: ''})]),
+    ...(A.i2.fib ? A.i2.fib.levels.filter(l => l.r === 0.5 || l.r === 0.618).map(l => candles.createPriceLine({price: l.price, color: '#d4af37', lineStyle: 3, title: 'Fib ' + l.r})) : []),
   ];
 
   showPrice(A.price);
@@ -366,7 +379,7 @@ function render() {
   $('mverdict').className = 'big ' + cls; $('mverdict').textContent = A.verdict;
   $('mplan').textContent = `Stop ${fmt(A.stop)} · H1 ${fmt(A.tp1)}`;
   signalAlert(A);
-  $('score').textContent = `Skor: ${A.score.toFixed(1)} (−8 … +8)`;
+  $('score').textContent = `Skor: ${A.score.toFixed(1)} (−14 … +14) · ${A.i2.regime === 'trend' ? 'Trend piyasası' : 'Yatay piyasa'}, ADX ${A.i2.adx != null ? A.i2.adx.toFixed(0) : '—'}`;
   const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
   $('plan').innerHTML = row('Yön', A.long ? '📈 Alım (long)' : '📉 Satım (short)') + row('Giriş', fmt(A.price)) +
     row('Zarar-durdur', `${fmt(A.stop)} <span class="note">(${pips(A.stop - A.price)} pip)</span>`) +
