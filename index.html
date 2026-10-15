@@ -105,7 +105,7 @@ b{font-weight:600;color:var(--text)}
     <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h" selected>1 saat</option>
     <option value="4h">4 saat</option><option value="1d">Günlük</option>
   </select>
-  <select id="mode"><option value="dengeli" selected>📈 Dengeli ★</option><option value="isabet">🎯 Yüksek isabet</option><option value="normal">Normal</option><option value="scalp">⚡ Scalp</option></select>
+  <select id="mode"><option value="seans" selected>🌅 Seans kırılımı ★ (1s)</option><option value="dengeli">📈 Dengeli (1s)</option><option value="donus">🔄 Ortalamaya dönüş (15dk)</option><option value="isabet">🎯 Yüksek isabet</option><option value="normal">Normal</option><option value="scalp">⚡ Scalp</option></select>
   <button id="refresh" title="Yenile" aria-label="Yenile">⟳</button>
   <span id="src" class="note"></span>
   <span id="live" class="note"></span>
@@ -159,6 +159,9 @@ Not: Bu sonuçlar tek bir dönemden; gelecekte aynı başarıyı garanti etmez. 
     <p class="note">⚠️ Bu araç teknik analiz üretir, yatırım tavsiyesi değildir. Hiçbir yazılım fiyatı yükseltemez ya da düşüremez; yalnızca olasılıkları değerlendirir. Her işlemde zarar-durdur kullanın.</p>
   </aside>
 </main>
+<script>window.IDEAS = [];</script>
+<script src="ideas/session_breakout.js"></script>
+<script src="ideas/mean_reversion.js"></script>
 <script src="ind2.js"></script>
 <script src="smc.js"></script>
 <script>
@@ -238,6 +241,8 @@ function levels(d, w = 5) {
 // isabet: doğrulamada %68 kazanma, +1,7R / 50 işlem (≈ başa baş). dengeli: doğrulamada %49 kazanma, +7,4R / 47 işlem.
 const PRESETS = {
   isabet: {base: 'normal', th: 7, sl: 3, tp: 0.5, htf: true, reg: false, sess: true, max: 48},
+  seans: {base: 'normal', idea: 'session_breakout', tf: '1h', th: 0, htf: false, reg: false, sess: false, max: 48},
+  donus: {base: 'normal', idea: 'mean_reversion', tf: '15m', th: 0, htf: false, reg: false, sess: false, max: 12},
   dengeli: {base: 'scalp', th: 3, sl: 3, tp: 1.5, htf: false, reg: true, sess: true, max: 48},
 };
 const preset = () => PRESETS[$('mode').value] || null;
@@ -338,7 +343,19 @@ function analyze(d) {
   if (sup[0] && price - sup[0] < 0.3 * A) events.push(`🎯 KRİTİK: fiyat ${fmt(sup[0])} desteğinde – tutarsa dönüş, kırılırsa stop avı ile hızlı düşüş`);
   if (!events.length) events.push('Son mumda belirgin bir formasyon yok.');
 
-  return {sm, i2, htfT, barClose, ghost, altPath, scen, alt, events, price, score, verdict, why, long, stop, tp1, tp2, risk, sup, res, e20, e50, s200, r, bb, macd: macd[L], hist: hist[L], atr: A, marks};
+  const out = {sm, i2, htfT, barClose, ghost, altPath, scen, alt, events, price, score, verdict, why, long, stop, tp1, tp2, risk, sup, res, e20, e50, s200, r, bb, macd: macd[L], hist: hist[L], atr: A, marks};
+  // Turnuvada seçilen stratejiler: yön, stop ve hedef stratejinin kendi kuralından gelir
+  if (PR && PR.idea) {
+    const idea = IDEAS.find(x => x.name === PR.idea);
+    let sig = null; try { sig = idea && idea.entry(d, L, out); } catch {}
+    out.sig = sig;
+    if (sig) {
+      const sg = sig.dir, rk = sig.sl * A;
+      Object.assign(out, {long: sg > 0, risk: rk, stop: price - sg * rk, tp1: price + sg * sig.tp * rk, tp2: price + sg * 2 * sig.tp * rk});
+      out.why = [`⭐ Strateji sinyali (${idea.desc})`, ...why];
+    }
+  }
+  return out;
 }
 
 // ---------- Çizim ----------
@@ -360,6 +377,7 @@ let btMarks = [];
 // İşlem açma kuralı – hem canlı karar hem geriye dönük test aynı fonksiyonu kullanır
 function entryCheck(A, filt = true) {
   const PR = preset(), dir = Math.sign(A.score);
+  if (PR && PR.idea) return A.sig ? {ok: true, dir: A.sig.dir} : {ok: false, why: PR.idea === 'session_breakout' ? 'Seans kırılımı kurulumu yok (Asya aralığı 03:00–10:00 TSİ; kırılım 10:00–19:00 TSİ arası beklenir)' : 'Ortalamaya dönüş kurulumu yok (Bollinger dışına taşıp geri dönüş bekleniyor)'};
   if (Math.abs(A.score) < STRONG || !dir) return {ok: false, why: `Sinyal yeterince güçlü değil (skor ${A.score.toFixed(1)}, gereken ±${STRONG})`};
   if (filt && htf.length && (!PR || PR.htf) && A.htfT !== dir) return {ok: false, why: `Üst zaman dilimi trendi ${A.htfT > 0 ? 'yukarı' : A.htfT < 0 ? 'aşağı' : 'yatay'} – sinyalle uyumsuz`};
   if (filt && (PR ? PR.sess : $('mode').value === 'scalp')) { const h = new Date(A.barClose * 1000).getUTCHours(); if (h < 7 || h >= 17) return {ok: false, why: 'İşlem saatleri dışında (10:00–20:00 TSİ)'}; }
@@ -375,7 +393,7 @@ function backtest(d, filt = true) {
       let R = null;
       if (pos.long) { if (k.low <= pos.stop) R = (Math.min(k.open, pos.stop) - pos.entry) / pos.risk; else if (k.high >= pos.tp) R = (pos.tp - pos.entry) / pos.risk; }
       else { if (k.high >= pos.stop) R = (pos.entry - Math.max(k.open, pos.stop)) / pos.risk; else if (k.low <= pos.tp) R = (pos.entry - pos.tp) / pos.risk; }
-      if (R == null && PR && ++pos.bars >= PR.max) R = (k.close - pos.entry) * (pos.long ? 1 : -1) / pos.risk; // süre doldu
+      if (R == null && PR && ++pos.bars >= (pos.max || PR.max)) R = (k.close - pos.entry) * (pos.long ? 1 : -1) / pos.risk; // süre doldu
       if (R != null) {
         R -= cost / pos.risk; // spread + komisyon
         trades.push({...pos, R, exit: k.time}); eq += R; peak = Math.max(peak, eq); dd = Math.max(dd, peak - eq); curve.push(eq); pos = null;
@@ -388,7 +406,7 @@ function backtest(d, filt = true) {
       const nx = d[i + 1]; if (!nx) { pos = {pending: true, long: A.long, entry: A.price}; break; }
       const entry = nx.open, risk = Math.abs(entry - A.stop);
       if (A.long ? (entry <= A.stop || entry >= A.tp1) : (entry >= A.stop || entry <= A.tp1)) continue;
-      pos = {entry, stop: A.stop, tp: A.tp1, long: A.long, risk, time: nx.time, bars: 0};
+      pos = {entry, stop: A.stop, tp: A.tp1, long: A.long, risk, time: nx.time, bars: 0, max: A.sig && A.sig.max};
     }
   }
   const wins = trades.filter(t => t.R > 0), gw = wins.reduce((a, t) => a + t.R, 0), gl = -trades.filter(t => t.R <= 0).reduce((a, t) => a + t.R, 0);
@@ -493,7 +511,7 @@ function render() {
   const MT = {go: `<span class="${S.long ? 'buy' : 'sell'}">${dirTxt} AÇ</span>`, prep: `<span class="hold">HAZIRLAN: ${dirTxt}</span>`, missed: '<span class="hold">KAÇTI</span>', wait: '<span class="hold">BEKLE</span>'};
   $('mverdict').innerHTML = MT[state];
   $('mplan').textContent = state === 'go' || state === 'prep' ? `Stop ${fmt(S.stop)} · Hedef ${fmt(S.tp1)} · ${lot} lot` : (fakes[0] || EF.why);
-  const MI = {dengeli: '📈 Dengeli: 1 saatlik, testte en kârlı mod (4 ay: %54 kazanma, +24R). Önerilen.', isabet: '🎯 Yüksek isabet: sık kazanır ama kazançlar küçük (4 ay: %72 kazanma, +7,6R).', normal: 'Normal: genel analiz modu – testte tutarlı kâr göstermedi, işlem için 📈 Dengeli önerilir.', scalp: '⚡ Scalp: 1–15 dk testlerinde zarar etti; sık işlem için önerilmez.'};
+  const MI = {seans: '🌅 Seans kırılımı: fikir turnuvasının kazananı. Asya seansı aralığının Londra/New York açılışında kırılması. Gerçek veride 156 gün: %54 kazanma, +15,3R, en büyük düşüş yalnızca 3,1R. Günde en fazla 1 işlem.', donus: '🔄 Ortalamaya dönüş: 15 dakikalık – sık işlem için. Gerçek veride 60 gün: 98 işlem, %54 kazanma, +10,4R.', dengeli: '📈 Dengeli: 1 saatlik (156 gün: %54 kazanma, +30R; ayarları bu verinin bir kısmında seçildi).', isabet: '🎯 Yüksek isabet: sık kazanır ama kazançlar küçük (4 ay: %72 kazanma, +7,6R).', normal: 'Normal: genel analiz modu – testte tutarlı kâr göstermedi, işlem için 📈 Dengeli önerilir.', scalp: '⚡ Scalp: 1–15 dk testlerinde zarar etti; sık işlem için önerilmez.'};
   $('modeinfo').textContent = MI[$('mode').value] || '';
   journalUpdate(A, EC);
   signalAlert(state, S, A);
@@ -556,7 +574,7 @@ function journalUpdate(A, E) {
   journalSave();
   const done = journal.filter(j => j.res != null), w = done.filter(j => j.res > 0).length, tot = done.reduce((a, j) => a + j.res, 0);
   $('jsum').textContent = journal.length ? `${journal.length} sinyal · sonuçlanan ${done.length} · kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'} · toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R` : 'Henüz sinyal yok.';
-  const ML = {normal: 'Normal', scalp: 'Scalp', isabet: '🎯', dengeli: '📈'};
+  const ML = {normal: 'Normal', scalp: 'Scalp', isabet: '🎯', dengeli: '📈', seans: '🌅', donus: '🔄'};
   $('journal').innerHTML = journal.slice(-8).reverse().map(j => row(
     `${new Date(j.bar * 1000).toLocaleString('tr-TR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})} ${ML[j.mode] || j.mode} ${j.tf} <b class="${j.long ? 'buy' : 'sell'}">${j.long ? 'AL' : 'SAT'}</b> @${fmt(j.entry)}`,
     j.res == null ? '⏳ açık' : j.res > 0 ? `<b class="buy">✓ +${j.res.toFixed(1)}R</b>` : '<b class="sell">✗ −1R</b>')).join('');
@@ -626,7 +644,7 @@ async function run() {
 setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); } }, 1000);
 ['spread'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).onchange = () => { store.set('altin_' + id, $(id).value); showBacktest(backtest(data), backtest(data, false)); render(); }; });
 ['bal', 'riskp', 'pipsize'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).oninput = () => { calc(); render(); }; });
-$('mode').onchange = () => { const m = $('mode').value; if (PRESETS[m]) $('tf').value = '1h'; else if (m === 'scalp' && ['4h', '1d', '1h'].includes($('tf').value)) $('tf').value = '5m'; run(); };
+$('mode').onchange = () => { const m = $('mode').value; if (PRESETS[m]) $('tf').value = PRESETS[m].tf || '1h'; else if (m === 'scalp' && ['4h', '1d', '1h'].includes($('tf').value)) $('tf').value = '5m'; run(); };
 try { const m = localStorage.getItem('altin_mode'), t = localStorage.getItem('altin_tf'); if (m && $('mode').querySelector(`option[value="${m}"]`)) $('mode').value = m; if (t) $('tf').value = t; } catch {}
 ['mode', 'tf'].forEach(id => $(id).addEventListener('change', () => { try { localStorage.setItem('altin_' + id, $(id).value); } catch {} }));
 $('refresh').onclick = run; $('tf').onchange = run;

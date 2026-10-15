@@ -16,7 +16,7 @@ async function hist(tf) {
   }
   return (cache[tf] = out.slice(-(N[tf] || 1000)));
 }
-const ideaSrc = readdirSync('test/ideas').filter(f => f.endsWith('.js')).map(f => readFileSync('test/ideas/' + f, 'utf8')).join('\n');
+const ideaSrc = readdirSync('ideas').filter(f => f.endsWith('.js')).map(f => readFileSync('ideas/' + f, 'utf8')).join('\n');
 
 process.on('unhandledRejection', e => console.log('YAKALANMAMIŞ', e?.message));
 const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
