@@ -15,7 +15,6 @@ Altın (XAU/USD) için tarayıcıda çalışan teknik analiz uygulaması. `index
 - 🧭 Basit görünüm + Sinyal merkezi: 5 doğrulanmış strateji (Kaplumbağa ve Elder dahil) her dakika taranır, teyitli sinyal kilitlenir (stop/hedef/süre dolana kadar değişmez), canlı R takibi
 - 🤖 AI güven skoru (üçlü bariyer + lojistik regresyon, Heikin Ashi, seans, EUR/USD dolar vekili)
 - 📰 Haber filtresi: NFP (ayın ilk cuması 15:00–16:30 TSİ) sırasında yeni sinyal yok
-- 📲 7/24 Telegram bildirimi (GitHub Actions, 15 dk; TELEGRAM_TOKEN ve TELEGRAM_CHAT sırları gerekir)
 - 🎯 Tek sinyal disiplini, TP1 + SL girişe (başabaş), TP2 veya stopta 🏁 POZİSYON KAPAT; grafikte giriş/stop/TP1/TP2 çizgileri ve kutular
 - 🔁 Yön değişimi: alım açıkken satış sinyali gelirse önce "📤 POZİSYONU KAPAT – elindekileri SAT", "Kapattım"dan sonra yeni SATIM sinyali (tersi de geçerli)
 - 🏆 Fikir turnuvası: uzman ajanların stratejileri gerçek veride yarıştı; kazanan 🌅 Seans kırılımı (1s) ve 🔄 Ortalamaya dönüş (15dk) modları
