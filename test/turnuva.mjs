@@ -30,7 +30,7 @@ for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) 
     route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(q))}).catch(() => {}); // sayfa kapandıysa yok say
   });
   await p.routeWebSocket?.(/binance/, () => {});
-  await p.goto('file://' + process.cwd() + '/index.html');
+  await p.goto('file://' + process.cwd() + '/index.html?noscan', {waitUntil: 'domcontentloaded', timeout: 120000});
   await p.waitForFunction(() => document.getElementById('verdict').textContent !== '…', null, {timeout: 300000});
   if (mode === 'normal') await p.addScriptTag({content: 'window.IDEAS = [];\n' + ideaSrc});
   const eurK = (await hist(tf, 'EURUSDT')).map(k => ({time: k[0] / 1000, close: +k[4]}));
@@ -55,7 +55,20 @@ for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) 
             if (sig.dir > 0 ? k.high >= tp : k.low <= tp) { r = sig.tp; break; }
           }
           if (r == null) { if (j >= d.length) return; r = (d[j - 1].close - e) * sig.dir / risk; }
-          s.tr.push({i, R: r - cost / risk, dir: sig.dir}); s.open = {until: j};
+          // Kısmi plan: TP1'de yarısı kapanır + stop girişe; kalanı TP2 (2×TP1 mesafesi), başabaş veya süre sonu
+          let rp = null, h1 = false, jj = i + 1; const tp2 = e + sig.dir * 2 * sig.tp * risk;
+          for (; jj < d.length && jj < i + 1 + (sig.max || 48); jj++) {
+            const k = d[jj];
+            if (!h1) {
+              if (sig.dir > 0 ? k.low <= stop : k.high >= stop) { rp = ((sig.dir > 0 ? Math.min(k.open, stop) : Math.max(k.open, stop)) - e) * sig.dir / risk; break; }
+              if (sig.dir > 0 ? k.high >= tp : k.low <= tp) { h1 = true; if (sig.dir > 0 ? k.high >= tp2 : k.low <= tp2) { rp = 1.5 * sig.tp; break; } }
+            } else {
+              if (sig.dir > 0 ? k.low <= e : k.high >= e) { rp = 0.5 * sig.tp; break; }
+              if (sig.dir > 0 ? k.high >= tp2 : k.low <= tp2) { rp = 1.5 * sig.tp; break; }
+            }
+          }
+          if (rp == null) { const cl = (d[Math.min(jj, d.length) - 1].close - e) * sig.dir / risk; rp = h1 ? 0.5 * sig.tp + 0.5 * cl : cl; }
+          s.tr.push({i, R: r - cost / risk, Rp: rp - cost / risk, dir: sig.dir}); s.open = {until: Math.max(j, jj)};
         } catch (err) { s.err = String(err); }
       });
     }
@@ -75,7 +88,7 @@ for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) 
       })};
     }
     return {ai, days: ((d[d.length - 1].time - d[250].time) / 86400).toFixed(0), out: ideas.map((idea, n) => ({name: idea.name, desc: idea.desc || '', err: st[n].err,
-      all: sum(st[n].tr), h1: sum(st[n].tr.filter(t => t.i < mid)), h2: sum(st[n].tr.filter(t => t.i >= mid))}))};
+      allP: sum(st[n].tr.map(t => ({...t, R: t.Rp}))), all: sum(st[n].tr), h1: sum(st[n].tr.filter(t => t.i < mid)), h2: sum(st[n].tr.filter(t => t.i >= mid))}))};
   }, [mode, tf, eurK]);
   if (res.ai) aiRes.push({tf, mode, ...res.ai});
   for (const o of res.out) rows.push({tf, days: res.days, ...o});
@@ -84,8 +97,8 @@ for (const tf of ['5m', '15m', '1h']) for (const mode of ['normal', 'dengeli']) 
 await b.close();
 const f = x => `${x.n} / %${x.win.toFixed(0)} / ${x.R >= 0 ? '+' : ''}${x.R.toFixed(1)}R`;
 rows.sort((a, b) => (b.all.n >= 20) - (a.all.n >= 20) || b.all.exp - a.all.exp);
-let md = '## Fikir turnuvası (gerçek PAXG, 0,30$ maliyet dahil)\n\n| Sıra | Fikir | Zaman | Gün | İşlem / Kazanma / Toplam | R/işlem | Maks. düşüş | 1. yarı | 2. yarı |\n|---|---|---|---|---|---|---|---|---|\n';
-rows.forEach((r, k) => { md += `| ${k + 1} | ${r.name}${r.err ? ' ⚠️' + r.err.slice(0, 60) : ''} | ${r.tf} | ${r.days} | ${f(r.all)} | ${r.all.exp.toFixed(3)} | ${r.all.dd.toFixed(1)}R | ${f(r.h1)} | ${f(r.h2)} |\n`; });
+let md = '## Fikir turnuvası (gerçek PAXG, 0,30$ maliyet dahil)\n\n| Sıra | Fikir | Zaman | Gün | İşlem / Kazanma / Toplam | R/işlem | Maks. düşüş | 1. yarı | 2. yarı | Kısmi plan (TP1 yarı+başabaş, TP2) |\n|---|---|---|---|---|---|---|---|---|---|\n';
+rows.forEach((r, k) => { md += `| ${k + 1} | ${r.name}${r.err ? ' ⚠️' + r.err.slice(0, 60) : ''} | ${r.tf} | ${r.days} | ${f(r.all)} | ${r.all.exp.toFixed(3)} | ${r.all.dd.toFixed(1)}R | ${f(r.h1)} | ${f(r.h2)} | ${f(r.allP)} (${r.allP.exp.toFixed(3)}/işlem) |\n`; });
 md += '\n' + [...new Set(rows.map(r => `- **${r.name}**: ${r.desc}`))].join('\n') + '\n';
 md += '\n## Yapay zeka filtresi (eğitim: ilk %60, test: son %40)\n';
 for (const a of aiRes) {

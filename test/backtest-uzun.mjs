@@ -32,7 +32,7 @@ for (const [mode, tf] of CONFIGS) {
     route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(tfq))}).catch(() => {}); // sayfa kapandıysa yok say
   });
   await p.routeWebSocket?.(/binance/, ws => {}); // canlı akışı kapat: test sabit veriyle yapılır
-  await p.goto('file://' + process.cwd() + '/index.html');
+  await p.goto('file://' + process.cwd() + '/index.html?noscan', {waitUntil: 'domcontentloaded', timeout: 120000});
   // ilk açılıştaki analizin bitmesini bekle, sonra ayarı olay tetiklemeden değiştirip tek bir run() çalıştır
   await p.waitForFunction(() => document.getElementById('verdict').textContent !== '…', null, {timeout: 300000});
   await p.evaluate(async ([m, t]) => { $('mode').value = m; $('tf').value = t; await run(); }, [mode, tf]);

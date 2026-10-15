@@ -63,6 +63,7 @@ body.simple .adv{display:none!important}
 #openSig .exitbox{border:2px solid var(--down);border-radius:10px;padding:10px;margin-bottom:10px;background:rgba(239,83,80,.12);animation:pulse 1.2s infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 6px rgba(239,83,80,.25)}}@media(prefers-reduced-motion:reduce){#openSig .exitbox{animation:none}}
 .closebtn{width:100%;margin-top:6px;min-height:44px;font-weight:700;background:var(--down);color:#fff;border:0;border-radius:10px}.closebtn.ghost{background:transparent;color:var(--muted);border:1px solid #333;font-weight:500}
+#openSig .tp1box{margin:8px 0;padding:10px;border-radius:10px;background:rgba(105,240,174,.12);border:2px solid #69f0ae;font-weight:700;color:#69f0ae}
 #openSig .sigtitle{font-size:22px;font-weight:800;margin-bottom:6px}
 #mbar{display:none}
 #actcard{position:relative;overflow:hidden;border:1px solid var(--line2);background:linear-gradient(160deg,var(--panel2),var(--panel) 60%);padding:18px}
@@ -130,7 +131,7 @@ b{font-weight:600;color:var(--text)}
       <div id="openSig"></div>
       <div id="scanStat" class="note"></div>
       <table id="sigHist"></table>
-      <p class="note">5 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🐢 Kaplumbağa (1s), 🔄 Ortalamaya dönüş (15dk), 📐 Elder üçlü ekran (15dk) – birlikte günde ortalama ~6 sinyal (geçmiş veriye göre). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı yönde birden fazla sinyal açık olabilir; ters yönde sinyal gelirse önce "📤 POZİSYONU KAPAT" uyarısı verilir.<br><span id="ver">Sürüm: 15.10 – AI skoru</span></p></div>
+      <p class="note">5 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🐢 Kaplumbağa (1s), 🔄 Ortalamaya dönüş (15dk), 📐 Elder üçlü ekran (15dk) – birlikte günde ortalama ~6 sinyal (geçmiş veriye göre). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı yönde birden fazla sinyal açık olabilir; ters yönde sinyal gelirse önce "📤 POZİSYONU KAPAT" uyarısı verilir.<br><span id="ver">Sürüm: 15.10 – TP1/TP2 + başabaş</span></p></div>
     <div class="card adv" id="actcard"><h2>Şimdi ne yapmalı?</h2><div id="action" class="big">…</div><div id="actdetail"></div><p id="actnote" class="note"></p><p id="modeinfo" class="note" style="border-top:1px solid #2a2f3a;padding-top:6px"></p></div>
     <div class="card adv"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
     <div class="card adv"><h2>İşlem planı</h2><table id="plan"></table></div>
@@ -417,6 +418,8 @@ const rsiChart = LightweightCharts.createChart($('rsi'), {...opts, timeScale: {v
 const candles = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350'});
 const line = (c, w = 1) => chart.addLineSeries({color: c, lineWidth: w, priceLineVisible: false, lastValueVisible: false});
 const sE20 = line('#ff9800', 2), sE50 = line('#2196f3', 2), sS200 = line('#ab47bc', 2), sBu = line('#555'), sBl = line('#555');
+const boxUp = chart.addBaselineSeries({baseValue: {type: 'price', price: 0}, topFillColor1: 'rgba(0,200,140,.18)', topFillColor2: 'rgba(0,200,140,.18)', topLineColor: 'rgba(0,0,0,0)', bottomFillColor1: 'rgba(0,0,0,0)', bottomFillColor2: 'rgba(0,0,0,0)', bottomLineColor: 'rgba(0,0,0,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
+const boxDn = chart.addBaselineSeries({baseValue: {type: 'price', price: 0}, topFillColor1: 'rgba(0,0,0,0)', topFillColor2: 'rgba(0,0,0,0)', topLineColor: 'rgba(0,0,0,0)', bottomFillColor1: 'rgba(255,23,68,.18)', bottomFillColor2: 'rgba(255,23,68,.18)', bottomLineColor: 'rgba(0,0,0,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
 const sGhost = chart.addCandlestickSeries({upColor: 'rgba(38,166,154,.35)', downColor: 'rgba(239,83,80,.35)', borderUpColor: '#26a69a', borderDownColor: '#ef5350', wickUpColor: 'rgba(38,166,154,.6)', wickDownColor: 'rgba(239,83,80,.6)', priceLineVisible: false, lastValueVisible: false});
 const sAlt = chart.addLineSeries({color: '#ff1744', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false});
 const sRsi = rsiChart.addLineSeries({color: '#d4af37', lineWidth: 1});
@@ -514,7 +517,14 @@ function render() {
   priceLines.forEach(p => candles.removePriceLine(p));
   const few = innerWidth < 600; // telefonda yalnızca temel seviyeler
   const os = sigs.find(x => x.res == null); // basit görünümde yalnızca kilitli sinyalin seviyeleri
-  priceLines = SIMPLE ? (os ? [candles.createPriceLine({price: os.entry, color: '#9aa4b2', lineStyle: 2, title: 'Giriş'}), candles.createPriceLine({price: os.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}), candles.createPriceLine({price: os.tp, color: '#00e676', lineWidth: 2, title: 'Hedef'})] : []) : few ? [candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}), candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef'})] : [
+  // Kutular: giriş→TP2 yeşil, giriş→stop kırmızı (sinyal mumundan itibaren)
+  if (os) {
+    const t0 = d.find(k => k.time >= os.bar)?.time ?? d[d.length - 1].time, pts = d.filter(k => k.time >= t0), tp2 = os.tp2 ?? (os.tp + (os.tp - os.entry)), up = os.long ? tp2 : os.stop, dn = os.long ? os.stop : tp2;
+    boxUp.applyOptions({baseValue: {type: 'price', price: os.entry}, topFillColor1: os.long ? 'rgba(0,200,140,.18)' : 'rgba(255,23,68,.18)', topFillColor2: os.long ? 'rgba(0,200,140,.18)' : 'rgba(255,23,68,.18)'});
+    boxDn.applyOptions({baseValue: {type: 'price', price: os.entry}, bottomFillColor1: os.long ? 'rgba(255,23,68,.18)' : 'rgba(0,200,140,.18)', bottomFillColor2: os.long ? 'rgba(255,23,68,.18)' : 'rgba(0,200,140,.18)'});
+    boxUp.setData(pts.map(k => ({time: k.time, value: up}))); boxDn.setData(pts.map(k => ({time: k.time, value: dn})));
+  } else { boxUp.setData([]); boxDn.setData([]); }
+  priceLines = SIMPLE ? (os ? [candles.createPriceLine({price: os.entry, color: '#9aa4b2', lineStyle: 2, title: 'Giriş'}), candles.createPriceLine({price: os.stop, color: '#ff1744', lineWidth: 2, title: os.tp1Hit ? 'Stop (başabaş)' : 'Stop'}), candles.createPriceLine({price: os.tp, color: '#69f0ae', lineWidth: 2, title: 'TP1'}), candles.createPriceLine({price: os.tp2 ?? (os.tp + (os.tp - os.entry)), color: '#00a884', lineWidth: 2, title: 'TP2'})] : []) : few ? [candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}), candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef'})] : [
     ...A.sup.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#26a69a', lineStyle: 2, title: 'Destek'})),
     ...A.res.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#ef5350', lineStyle: 2, title: 'Direnç'})),
     candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}),
@@ -789,7 +799,7 @@ async function scanOnce() {
       const sg = P.long ? 1 : -1, dS = Math.abs(P.price - P.stop), dT = Math.abs(P.tp1 - P.price), e = bar.open;
       const maxBars = (P.sig && P.sig.max) || (PRESETS[st.mode] && PRESETS[st.mode].max) || 48;
       const x = {id: st.mode + bar.time, mode: st.mode, ad: st.ad, tf: st.tf, bar: bar.time, long: P.long, entry: e, stop: e - sg * dS, tp: e + sg * dT,
-        dS, dT, until: bar.time + maxBars * TF_SEC[st.tf], res: null};
+        dS, dT, tp2: e + sg * 2 * dT, until: bar.time + maxBars * TF_SEC[st.tf], res: null};
       const mc = await aiModel(st.tf); x.ai = aiScore(mc, d, sg); x.aiBase = mc && mc.M ? mc.M.base : null;
       // Ters yönde açık pozisyon varsa: önce "elindekini kapat" uyarısı, yeni sinyal pozisyon kapanınca açılır
       const opp = sigs.filter(o => o.res == null && o.long !== P.long);
@@ -798,7 +808,7 @@ async function scanOnce() {
         if (!pendRev || pendRev.long !== x.long) { pendRev = x; revSave(); }
         sigSave(); dirty = true; continue;
       }
-      if (sigs.some(o => o.res == null && o.mode === st.mode)) continue; // aynı stratejiden ikinci sinyal açılmaz
+      if (sigs.some(o => o.res == null)) continue; // tek sinyal disiplini: açık pozisyon kapanmadan yeni sinyal aranmaz
       sigs.push(x); sigSave(); sigAlert(x); dirty = true;
     }
     lastScan = new Date();
@@ -818,12 +828,12 @@ function activateRev() {
   const now = Date.now() / 1000, x = pendRev; pendRev = null; revSave();
   if (now >= x.until || !lastPrice) return;
   const sg = x.long ? 1 : -1, e = lastPrice;
-  Object.assign(x, {id: x.id + 'r', entry: e, stop: e - sg * x.dS, tp: e + sg * x.dT, rev: true});
+  Object.assign(x, {id: x.id + 'r', entry: e, stop: e - sg * x.dS, tp: e + sg * x.dT, tp2: e + sg * 2 * x.dT, rev: true});
   sigs.push(x); sigSave(); sigAlert(x); dirty = true;
 }
 function closeSig(id) {
   const x = sigs.find(o => o.id === id); if (!x || x.res != null || !lastPrice) return;
-  x.res = (lastPrice - x.entry) * (x.long ? 1 : -1) / Math.abs(x.entry - x.stop); x.closed = Date.now() / 1000; x.manual = true;
+  x.res = (lastPrice - x.entry) * (x.long ? 1 : -1) / (x.dS || Math.abs(x.entry - x.stop)); x.closed = Date.now() / 1000; x.manual = true;
   sigSave(); activateRev(); dirty = true; renderSigs();
 }
 function sigAlert(x) {
@@ -832,30 +842,52 @@ function sigAlert(x) {
   try { if (window.Notification && Notification.permission === 'granted') new Notification(`✅ Altın: ${x.long ? 'ALIM' : 'SATIM'} AÇ – ${x.ad}`, {body: `Giriş ${fmt(x.entry)} · Stop ${fmt(x.stop)} · Hedef ${fmt(x.tp)}`, icon: 'icon.svg'}); } catch {}
 }
 // Açık sinyalleri canlı fiyatla takip et: stop / hedef / süre
+// Pozisyon takibi: TP1'de yarısı kapanır ve stop girişe (başabaş) taşınır; TP2, başabaş stop veya süre sonunda pozisyon kapanır.
+// Sonuç R cinsinden, ilk risk (giriş–ilk stop) üzerinden: TP1 öncesi stop = −1R; TP1 sonrası = 0,5×R1 + 0,5×(R2 veya 0).
 function trackSigs(price) {
   let ch = false; const now = Date.now() / 1000;
   for (const x of sigs) if (x.res == null) {
-    const r = (price - x.entry) * (x.long ? 1 : -1) / Math.abs(x.entry - x.stop);
-    if (x.long ? price <= x.stop : price >= x.stop) { x.res = -1; x.closed = now; ch = true; }
-    else if (x.long ? price >= x.tp : price <= x.tp) { x.res = Math.abs(x.tp - x.entry) / Math.abs(x.entry - x.stop); x.closed = now; ch = true; }
-    else if (now >= x.until) { x.res = r; x.closed = now; x.timeout = true; ch = true; }
+    const sg = x.long ? 1 : -1, risk = x.dS || Math.abs(x.entry - x.stop), R1 = Math.abs(x.tp - x.entry) / risk;
+    const tp2 = x.tp2 ?? (x.tp + (x.tp - x.entry)), R2 = Math.abs(tp2 - x.entry) / risk, r = (price - x.entry) * sg / risk;
+    const close = (res, why) => { x.res = res; x.closed = now; x.why = why; ch = true; lastClosed = x; closeAlert(x); };
+    if (!x.tp1Hit) {
+      if (sg * (price - x.stop) <= 0) close(-1, 'Stop');
+      else if (sg * (price - x.tp) >= 0) { x.tp1Hit = now; x.stop = x.entry; ch = true; tp1Alert(x); }
+      else if (now >= x.until) close(r, 'Süre doldu');
+    } else {
+      if (sg * (price - x.entry) <= 0) close(0.5 * R1, 'Başabaş (stop girişte)');
+      else if (sg * (price - tp2) >= 0) close(0.5 * R1 + 0.5 * R2, 'Hedef 2');
+      else if (now >= x.until) close(0.5 * R1 + 0.5 * r, 'Süre doldu');
+    }
   }
   if (ch) { sigSave(); activateRev(); dirty = true; }
 }
+let lastClosed = null;
+function tp1Alert(x) {
+  if (!notifyOn) return;
+  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch {}
+  try { if (window.Notification && Notification.permission === 'granted') new Notification('🎯 Altın: TP1 + SL GİRİŞE', {body: `${x.ad}: pozisyonun yarısını kapatın, stopu girişe (${fmt(x.entry)}) taşıyın. Risk sıfır.`, icon: 'icon.svg'}); } catch {}
+}
+function closeAlert(x) {
+  if (!notifyOn) return;
+  try { navigator.vibrate && navigator.vibrate([400, 100, 400]); } catch {}
+  try { if (window.Notification && Notification.permission === 'granted') new Notification(`🏁 Altın: POZİSYON KAPAT (${x.why})`, {body: `${x.ad}: sonuç ${x.res >= 0 ? '+' : ''}${x.res.toFixed(2)}R. Yeni sinyal aranıyor.`, icon: 'icon.svg'}); } catch {}
+}
 function renderSigs() {
   const price = lastPrice, open = sigs.filter(x => x.res == null);
-  const lotOf = x => { const l = (+$('bal').value * +$('riskp').value / 100) / (Math.abs(x.entry - x.stop) * 100); return l < 0.01 ? '<0,01' : l.toFixed(2); };
+  const lotOf = x => { const l = (+$('bal').value * +$('riskp').value / 100) / ((x.dS || Math.abs(x.entry - x.stop)) * 100); return l < 0.01 ? '<0,01' : l.toFixed(2); };
   const html = open.length ? open.map(x => {
-    const r = price ? (price - x.entry) * (x.long ? 1 : -1) / Math.abs(x.entry - x.stop) : 0;
+    const r = price ? (price - x.entry) * (x.long ? 1 : -1) / (x.dS || Math.abs(x.entry - x.stop)) : 0;
     const left = Math.max(0, Math.round((x.until - Date.now() / 1000) / 3600 * 10) / 10);
     const ex = x.exit ? `<div class="exitbox"><div class="sigtitle sell">📤 POZİSYONU KAPAT – ${x.long ? 'elindekileri SAT' : 'geri AL'}</div>
       <p style="margin:4px 0">${x.exit.ad} ters yönde sinyal verdi. Bu ${x.long ? 'alımı' : 'satışı'} şimdi kapatın (şu an ${r >= 0 ? '+' : ''}${r.toFixed(2)}R).${pendRev ? ` Kapattıktan sonra <b>${pendRev.long ? 'ALIM' : 'SATIM'}</b> sinyali açılacak.` : ''}</p>
       <button class="closebtn" data-id="${x.id}">✅ Kapattım</button></div>` : '';
     return `<div class="sigbox ${x.long ? 'L' : 'S'}">${ex}<div class="sigtitle ${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} – AÇIK${x.rev ? ' (yön değişimi)' : ''}</div>
-      <table>${row('Strateji', `${x.ad} (${x.tf})`)}${row('Giriş', fmt(x.entry))}${row('Zarar-durdur', `<b class="sell">${fmt(x.stop)}</b>`)}${row('Hedef 1', `<b class="buy">${fmt(x.tp)}</b>`)}${row('Hedef 2 (isteğe bağlı)', fmt(x.tp + (x.tp - x.entry)))}${x.ai != null ? row('🤖 AI güven skoru', `<b class="${x.ai >= x.aiBase ? 'buy' : 'hold'}">%${(x.ai * 100).toFixed(0)}</b> <span class="note">(ortalama %${(x.aiBase * 100).toFixed(0)})</span>`) : ''}${row('Lot', lotOf(x))}
+      <table>${row('Strateji', `${x.ad} (${x.tf})`)}${row('Giriş', fmt(x.entry))}${row('Zarar-durdur', `<b class="sell">${fmt(x.stop)}</b>`)}${row('TP1', `<b style="color:#69f0ae">${fmt(x.tp)}</b>${x.tp1Hit ? ' ✓' : ''}`)}${row('TP2', `<b style="color:#00a884">${fmt(x.tp2 ?? (x.tp + (x.tp - x.entry)))}</b>`)}${x.ai != null ? row('🤖 AI güven skoru', `<b class="${x.ai >= x.aiBase ? 'buy' : 'hold'}">%${(x.ai * 100).toFixed(0)}</b> <span class="note">(ortalama %${(x.aiBase * 100).toFixed(0)})</span>`) : ''}${row('Lot', lotOf(x))}
       ${row('Şu an', price ? `${fmt(price)} → <b class="${r >= 0 ? 'buy' : 'sell'}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</b>` : '—')}${row('Kalan süre', left + ' saat')}</table>
-      <p class="note">İsteğe bağlı kâr planı: Hedef 1'de pozisyonun yarısını kapatıp stopu girişe çekin, kalanını Hedef 2'ye bırakın (sonuç takibi Hedef 1'e göre yapılır).<br>Bu sinyal kilitli: ekrandaki diğer göstergeler değişse de plan aynı kalır. Stop ve hedefi emirle koyun.</p>${x.exit ? '' : `<button class="closebtn ghost" data-id="${x.id}">Pozisyonu kendim kapattım</button>`}</div>`;
-  }).join('') : `<div class="sigbox"><div class="sigtitle hold">⏸ Sinyal yok – bekle</div><p class="note" style="margin:0">Yeni sinyal geldiğinde burada kilitli olarak görünür${notifyOn ? ' ve bildirim gelir' : ' (🔔 bildirimi açın)'}.</p></div>`;
+      ${x.tp1Hit ? '<div class="tp1box">🎯 TP1 + SL GİRİŞE – pozisyonun yarısını kapatın, stopu girişe taşıyın. Risk sıfır.</div>' : ''}
+      <p class="note">Plan: TP1'de yarısını kapat ve stopu girişe çek, kalanı TP2'de kapat.<br>Bu sinyal kilitli: ekrandaki diğer göstergeler değişse de plan aynı kalır. Stop ve hedefi emirle koyun.</p>${x.exit ? '' : `<button class="closebtn ghost" data-id="${x.id}">Pozisyonu kendim kapattım</button>`}</div>`;
+  }).join('') : (lastClosed && Date.now() / 1000 - lastClosed.closed < 900 ? `<div class="sigbox"><div class="sigtitle ${lastClosed.res >= 0 ? 'buy' : 'sell'}">🏁 POZİSYON KAPAT</div><p style="margin:4px 0">${lastClosed.ad}: ${lastClosed.why} – sonuç <b>${lastClosed.res >= 0 ? '+' : ''}${lastClosed.res.toFixed(2)}R</b>. Elinizde kalan varsa kapatın. Yeni sinyal aranıyor…</p></div>` : '') + `<div class="sigbox"><div class="sigtitle hold">⏸ Sinyal yok – bekle</div><p class="note" style="margin:0">Yeni sinyal geldiğinde burada kilitli olarak görünür${notifyOn ? ' ve bildirim gelir' : ' (🔔 bildirimi açın)'}.</p></div>`;
   if (html !== lastSigHtml) { $('openSig').innerHTML = html; lastSigHtml = html; } // gereksiz yeniden çizim yok: düğmeye basış kaybolmaz
   const done = sigs.filter(x => x.res != null), w = done.filter(x => x.res > 0).length, tot = done.reduce((a, x) => a + x.res, 0);
   $('scanStat').textContent = (newsFreeze() ? '⏸ ' + newsFreeze() + ' · ' : '') + `${lastScan ? 'Son tarama ' + lastScan.toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'}) : 'Taranıyor…'} · Sonuçlanan ${done.length} sinyal, kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'}, toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R`;
@@ -869,7 +901,7 @@ function renderSigs() {
   }
 }
 setInterval(() => { if (lastPrice) trackSigs(lastPrice); renderSigs(); }, 1000);
-setTimeout(scanOnce, 1500); setInterval(scanOnce, 60000);
+if (!/noscan/.test(location.search)) { setTimeout(scanOnce, 1500); setInterval(scanOnce, 60000); } // testlerde ?noscan
 // Görünüm: basit (varsayılan) / detaylı
 function setView(simple) { document.body.classList.toggle('simple', simple); dirty = true; $('viewtgl').textContent = simple ? '☰ Detay' : '✕ Basit'; try { localStorage.setItem('altin_view', simple ? 's' : 'd'); } catch {} setTimeout(() => { chart.applyOptions({width: $('chart').clientWidth}); }, 50); }
 let v0 = 's'; try { v0 = localStorage.getItem('altin_view') || 's'; } catch {}
