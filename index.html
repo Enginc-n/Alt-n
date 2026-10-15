@@ -57,6 +57,10 @@ td:only-child{color:var(--text);text-align:left}
 ul{padding-left:18px;margin:0;font-size:13px;line-height:1.6}li{margin:3px 0}li::marker{color:var(--gold2)}
 .note{font-size:12.5px;color:var(--muted);line-height:1.55}
 p.note{margin:10px 0 0}
+body.simple .adv{display:none!important}
+#openSig .sigbox{border-radius:12px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.03);border:2px solid #333}
+#openSig .sigbox.L{border-color:var(--up)}#openSig .sigbox.S{border-color:var(--down)}
+#openSig .sigtitle{font-size:22px;font-weight:800;margin-bottom:6px}
 #mbar{display:none}
 #actcard{position:relative;overflow:hidden;border:1px solid var(--line2);background:linear-gradient(160deg,var(--panel2),var(--panel) 60%);padding:18px}
 #actcard::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--line2)}
@@ -105,8 +109,9 @@ b{font-weight:600;color:var(--text)}
     <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h" selected>1 saat</option>
     <option value="4h">4 saat</option><option value="1d">Günlük</option>
   </select>
-  <select id="mode"><option value="seans" selected>🌅 Seans kırılımı ★ (1s)</option><option value="dengeli">📈 Dengeli (1s)</option><option value="donus">🔄 Ortalamaya dönüş (15dk)</option><option value="isabet">🎯 Yüksek isabet</option><option value="normal">Normal</option><option value="scalp">⚡ Scalp</option></select>
+  <select id="mode" class="adv"><option value="seans" selected>🌅 Seans kırılımı ★ (1s)</option><option value="dengeli">📈 Dengeli (1s)</option><option value="donus">🔄 Ortalamaya dönüş (15dk)</option><option value="isabet">🎯 Yüksek isabet</option><option value="normal">Normal</option><option value="scalp">⚡ Scalp</option></select>
   <button id="refresh" title="Yenile" aria-label="Yenile">⟳</button>
+  <button id="viewtgl" title="Görünüm">☰ Detay</button>
   <span id="src" class="note"></span>
   <span id="live" class="note"></span>
   <span id="price">—</span>
@@ -114,13 +119,18 @@ b{font-weight:600;color:var(--text)}
 <main>
   <section>
     <div id="chart"></div>
-    <div id="rsi"></div>
-    <p class="note">Mum: XAU/USD karşılığı (PAXG/USDT, 1 PAXG = 1 ons altın). Turuncu: EMA20 (scalp: EMA9), mavi: EMA50 (scalp: EMA21), mor: SMA200, gri: Bollinger. Oklar: geçmiş al/sat sinyalleri. Şeffaf mumlar: ajanın öngördüğü sanal mumlar (ana senaryo); kırmızı kesikli çizgi: alternatif senaryo.</p>
+    <div id="rsi" class="adv"></div>
+    <p class="note adv">Mum: XAU/USD karşılığı (PAXG/USDT, 1 PAXG = 1 ons altın). Turuncu: EMA20 (scalp: EMA9), mavi: EMA50 (scalp: EMA21), mor: SMA200, gri: Bollinger. Oklar: geçmiş al/sat sinyalleri. Şeffaf mumlar: ajanın öngördüğü sanal mumlar (ana senaryo); kırmızı kesikli çizgi: alternatif senaryo.</p>
   </section>
   <aside>
-    <div class="card" id="actcard"><h2>Şimdi ne yapmalı?</h2><div id="action" class="big">…</div><div id="actdetail"></div><p id="actnote" class="note"></p><p id="modeinfo" class="note" style="border-top:1px solid #2a2f3a;padding-top:6px"></p></div>
-    <div class="card"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
-    <div class="card"><h2>İşlem planı</h2><table id="plan"></table></div>
+    <div class="card" id="sigcenter"><h2>Sinyal merkezi</h2>
+      <div id="openSig"></div>
+      <div id="scanStat" class="note"></div>
+      <table id="sigHist"></table>
+      <p class="note">3 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🔄 Ortalamaya dönüş (15dk). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı anda en fazla 1 açık sinyal.</p></div>
+    <div class="card adv" id="actcard"><h2>Şimdi ne yapmalı?</h2><div id="action" class="big">…</div><div id="actdetail"></div><p id="actnote" class="note"></p><p id="modeinfo" class="note" style="border-top:1px solid #2a2f3a;padding-top:6px"></p></div>
+    <div class="card adv"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
+    <div class="card adv"><h2>İşlem planı</h2><table id="plan"></table></div>
     <div class="card"><h2>Pip &amp; lot hesaplayıcı</h2>
       <table>
         <tr><td>Bakiye ($)</td><td><input id="bal" type="number" value="1000" min="0"></td></tr>
@@ -130,16 +140,16 @@ b{font-weight:600;color:var(--text)}
       </table>
       <table id="calc" style="margin-top:6px"></table>
       <p class="note">Altında 1 standart lot = 100 ons. Fiyat 1$ hareket ederse 1 lotta ±100$ olur. Aracı kurumunuzun pip tanımını kontrol edin.</p></div>
-    <div class="card"><h2>İleriye dönük senaryo</h2><ul id="scen"></ul></div>
-    <div class="card"><h2>Tespit edilen olaylar</h2><ul id="events"></ul></div>
-    <div class="card"><h2>Göstergeler</h2><table id="ind"></table></div>
-    <div class="card"><h2>Sinyal günlüğü (bu cihazda)</h2><div id="jsum" class="note"></div><table id="journal"></table>
+    <div class="card adv"><h2>İleriye dönük senaryo</h2><ul id="scen"></ul></div>
+    <div class="card adv"><h2>Tespit edilen olaylar</h2><ul id="events"></ul></div>
+    <div class="card adv"><h2>Göstergeler</h2><table id="ind"></table></div>
+    <div class="card adv"><h2>Sinyal günlüğü (bu cihazda)</h2><div id="jsum" class="note"></div><table id="journal"></table>
       <p class="note">Uygulama açıkken kapanan her mumda oluşan işlem sinyali (giriş: sonraki mumun açılışı) kaydedilir ve sonradan stop/hedefe değip değmediği otomatik işaretlenir. Gerçek performansı buradan takip edin. <button id="jcsv" style="font-size:11px;padding:2px 8px;min-height:0">CSV indir</button> <button id="jclear" style="font-size:11px;padding:2px 8px;min-height:0">Temizle</button></p></div>
-    <div class="card"><h2>Geriye dönük test</h2><table id="bt"></table><div id="btcurve"></div><p id="btnote" class="note"></p>
+    <div class="card adv"><h2>Geriye dönük test</h2><table id="bt"></table><div id="btcurve"></div><p id="btnote" class="note"></p>
       <p class="note">Kural: skor ≥ +4 → long, ≤ −4 → short, yatay piyasada (ADX düşük) yalnızca likidite avından sonra, <b>yalnızca üst zaman dilimi trendi aynı yöndeyse</b> (scalp modunda ayrıca sadece 10:00–20:00 TSİ, Londra+New York seansı). Mum kapanışında giriş, zarar-durdur (−1R) veya Hedef 1'de çıkış. Spread+komisyon her işlemden düşülür. Grafikte sarı oklar test girişleri, yeşil/kırmızı noktalar çıkışlardır. “Filtresiz eski kural” satırı, filtreler olmadan aynı dönemin sonucunu gösterir.</p></div>
-    <div class="card"><h2>Gerekçeler</h2><ul id="why"></ul></div>
-    <div class="card"><h2>Yükseliş / düşüş için ne gerekir?</h2><ul id="need"></ul></div>
-    <div class="card"><h2>Teknikler – neden artar, neden düşer?</h2>
+    <div class="card adv"><h2>Gerekçeler</h2><ul id="why"></ul></div>
+    <div class="card adv"><h2>Yükseliş / düşüş için ne gerekir?</h2><ul id="need"></ul></div>
+    <div class="card adv"><h2>Teknikler – neden artar, neden düşer?</h2>
       <details><summary><b>Trend (EMA20/50, SMA200)</b></summary><p class="note">Fiyat SMA200 üzerindeyse ana trend yukarıdır; kurumlar bu çizgiyi izler. EMA20'nin EMA50'yi yukarı kesmesi kısa vadeli alıcıların güçlendiğini gösterir. Golden Cross (EMA50 ↑ SMA200) uzun vadeli boğa, Death Cross ayı sinyalidir.</p></details>
       <details open><summary><b>🎯 Yüksek isabet ve 📈 Dengeli modlar (1 saat)</b></summary><p class="note">Bu iki mod, 1 saatlik gerçek PAXG geçmişinde 1.600 ayar kombinasyonu denenerek seçildi: ilk 94 günde seçildi, hiç görülmeyen son 63 günde doğrulandı (spread dahil).<br>
 <b>🎯 Yüksek isabet:</b> çok güçlü sinyal (skor ≥7), üst zaman dilimi uyumu, 10:00–20:00 TSİ, stop 3×ATR, hedef 0,5R. Doğrulamada <b>%68 kazanma</b> ama toplam yalnızca +1,7R (50 işlem) – yani <b>neredeyse başa baş</b>: kazançlar küçük, nadir kayıplar büyük (1 kayıp ≈ 2 kazancı siler).<br>
@@ -485,15 +495,17 @@ function calc() {
 function render() {
   const d = data, A = analyze(d); lastA = A;
   const ser = arr => d.map((k, i) => arr[i] == null ? {time: k.time} : {time: k.time, value: arr[i]});
-  candles.setData(d); candles.setMarkers([...A.marks, ...btMarks].sort((x, y) => x.time - y.time));
+  const SIMPLE = document.body.classList.contains('simple');
+  candles.setData(d); candles.setMarkers(SIMPLE ? [] : [...A.marks, ...btMarks].sort((x, y) => x.time - y.time));
   sE20.setData(ser(A.e20)); sE50.setData(ser(A.e50)); sS200.setData(ser(A.s200));
   sBu.setData(ser(A.bb.map(b => b && b.up))); sBl.setData(ser(A.bb.map(b => b && b.lo)));
-  sRsi.setData(ser(A.r)); sGhost.setData(A.ghost); sAlt.setData(A.altPath);
+  sRsi.setData(ser(A.r)); sGhost.setData(SIMPLE ? [] : A.ghost); sAlt.setData(SIMPLE ? [] : A.altPath);
   $('scen').innerHTML = `<li>🔮 <b>Ana senaryo:</b> ${A.scen}</li><li>⚠️ ${A.alt}</li>`;
   $('events').innerHTML = A.events.map(e => `<li>${e}</li>`).join('');
   priceLines.forEach(p => candles.removePriceLine(p));
   const few = innerWidth < 600; // telefonda yalnızca temel seviyeler
-  priceLines = few ? [candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}), candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef'})] : [
+  const os = sigs.find(x => x.res == null); // basit görünümde yalnızca kilitli sinyalin seviyeleri
+  priceLines = SIMPLE ? (os ? [candles.createPriceLine({price: os.entry, color: '#9aa4b2', lineStyle: 2, title: 'Giriş'}), candles.createPriceLine({price: os.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}), candles.createPriceLine({price: os.tp, color: '#00e676', lineWidth: 2, title: 'Hedef'})] : []) : few ? [candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}), candles.createPriceLine({price: A.tp1, color: '#00e676', lineWidth: 2, title: 'Hedef'})] : [
     ...A.sup.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#26a69a', lineStyle: 2, title: 'Destek'})),
     ...A.res.slice(0, 2).map(v => candles.createPriceLine({price: v, color: '#ef5350', lineStyle: 2, title: 'Direnç'})),
     candles.createPriceLine({price: A.stop, color: '#ff1744', lineWidth: 2, title: 'Stop'}),
@@ -522,7 +534,7 @@ function render() {
     // fiyat girişten riskin yarısından fazla uzaklaştıysa fırsat kaçmış sayılır
     state = Math.abs(A.price - o) > 0.5 * dS || (sg > 0 ? A.price <= S.stop : A.price >= S.stop) ? 'missed' : 'go';
   } else if (EF.ok) { state = 'prep'; S = {long: A.long, entry: A.price, stop: A.stop, tp1: A.tp1, risk: A.risk}; }
-  $('actcard').className = 'card ' + (state === 'go' ? (S.long ? 'go-buy' : 'go-sell') : state === 'prep' ? 'go-prep' : '');
+  $('actcard').className = 'card adv ' + (state === 'go' ? (S.long ? 'go-buy' : 'go-sell') : state === 'prep' ? 'go-prep' : '');
   const lot = lotFor(S), dirTxt = S.long ? 'ALIM' : 'SATIM', fakeHtml = fakes.length ? `<ul style="margin:6px 0">${fakes.map(f => `<li>${f}</li>`).join('')}</ul>` : '';
   if (state === 'go') {
     $('action').innerHTML = `<span class="${S.long ? 'buy' : 'sell'}">✅ ${dirTxt} AÇ (teyitli)</span>`;
@@ -543,8 +555,10 @@ function render() {
     $('actnote').textContent = `Ajanın genel görüşü: ${A.verdict}. Sonraki mum kapanışı ≈${closeIn} dk sonra.`;
   }
   const MT = {go: `<span class="${S.long ? 'buy' : 'sell'}">${dirTxt} AÇ</span>`, prep: `<span class="hold">HAZIRLAN: ${dirTxt}</span>`, missed: '<span class="hold">KAÇTI</span>', wait: '<span class="hold">BEKLE</span>'};
+  if (!document.body.classList.contains('simple')) {
   $('mverdict').innerHTML = MT[state];
   $('mplan').textContent = state === 'go' || state === 'prep' ? `Stop ${fmt(S.stop)} · Hedef ${fmt(S.tp1)} · ${lot} lot` : (fakes[0] || EF.why);
+  }
   const MI = {seans: '🌅 Seans kırılımı: fikir turnuvasının kazananı. Asya seansı aralığının Londra/New York açılışında kırılması. Gerçek veride 156 gün: %54 kazanma, +15,3R, en büyük düşüş yalnızca 3,1R. Günde en fazla 1 işlem.', donus: '🔄 Ortalamaya dönüş: 15 dakikalık – sık işlem için. Gerçek veride 60 gün: 98 işlem, %54 kazanma, +10,4R.', dengeli: '📈 Dengeli: 1 saatlik (156 gün: %54 kazanma, +30R; ayarları bu verinin bir kısmında seçildi).', isabet: '🎯 Yüksek isabet: sık kazanır ama kazançlar küçük (4 ay: %72 kazanma, +7,6R).', normal: 'Normal: genel analiz modu – testte tutarlı kâr göstermedi, işlem için 📈 Dengeli önerilir.', scalp: '⚡ Scalp: 1–15 dk testlerinde zarar etti; sık işlem için önerilmez.'};
   $('modeinfo').textContent = MI[$('mode').value] || '';
   journalUpdate(A, EC);
@@ -698,6 +712,81 @@ setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); 
 $('mode').onchange = () => { const m = $('mode').value; if (PRESETS[m]) $('tf').value = PRESETS[m].tf || '1h'; else if (m === 'scalp' && ['4h', '1d', '1h'].includes($('tf').value)) $('tf').value = '5m'; run(); };
 try { const m = localStorage.getItem('altin_mode'), t = localStorage.getItem('altin_tf'); if (m && $('mode').querySelector(`option[value="${m}"]`)) $('mode').value = m; if (t) $('tf').value = t; } catch {}
 ['mode', 'tf'].forEach(id => $(id).addEventListener('change', () => { try { localStorage.setItem('altin_' + id, $(id).value); } catch {} }));
+// ================= Sinyal merkezi: çoklu strateji tarayıcı + kilitli sinyaller =================
+const STRATS = [{mode: 'seans', tf: '1h', ad: '🌅 Seans kırılımı'}, {mode: 'dengeli', tf: '1h', ad: '📈 Dengeli'}, {mode: 'donus', tf: '15m', ad: '🔄 Ortalamaya dönüş'}];
+let sigs = []; try { sigs = JSON.parse(localStorage.getItem('altin_sigs') || '[]'); } catch {}
+const sigSave = () => { try { localStorage.setItem('altin_sigs', JSON.stringify(sigs.slice(-100))); } catch {} };
+let lastScan = null, scanBusy = false;
+async function scanOnce() {
+  if (scanBusy) return; scanBusy = true;
+  try {
+    const cache = {};
+    const get = async tf => cache[tf] ||= await fetchKlines(tf);
+    for (const st of STRATS) {
+      const d = await get(st.tf), hd = HTF[st.tf] ? await get(HTF[st.tf]) : null;
+      if (!d || d.length < 260) continue;
+      // analyze() sayfadaki mod/zaman/üst-TF seçimini okur: senkron blokta geçici olarak değiştirip geri al
+      const save = {m: $('mode').value, t: $('tf').value, h: htf, s: STRONG};
+      let P, E;
+      try { $('mode').value = st.mode; $('tf').value = st.tf; htf = buildHtf(hd, HTF[st.tf]); P = analyze(d.slice(0, -1)); E = entryCheck(P); }
+      finally { $('mode').value = save.m; $('tf').value = save.t; htf = save.h; STRONG = save.s; }
+      const bar = d[d.length - 1];
+      if (!E.ok || sigs.some(x => x.mode === st.mode && x.bar === bar.time)) continue;
+      if (sigs.some(x => x.res == null)) continue; // aynı anda tek açık sinyal: çelişkili girişleri önler
+      const sg = P.long ? 1 : -1, dS = Math.abs(P.price - P.stop), dT = Math.abs(P.tp1 - P.price), e = bar.open;
+      const maxBars = (P.sig && P.sig.max) || (PRESETS[st.mode] && PRESETS[st.mode].max) || 48;
+      const x = {id: st.mode + bar.time, mode: st.mode, ad: st.ad, tf: st.tf, bar: bar.time, long: P.long, entry: e, stop: e - sg * dS, tp: e + sg * dT,
+        until: bar.time + maxBars * TF_SEC[st.tf], res: null};
+      sigs.push(x); sigSave(); sigAlert(x); dirty = true;
+    }
+    lastScan = new Date();
+  } catch (e) { console.warn('tarama', e); }
+  scanBusy = false; renderSigs();
+}
+function sigAlert(x) {
+  if (!notifyOn) return;
+  try { navigator.vibrate && navigator.vibrate([300, 100, 300, 100, 300]); } catch {}
+  try { if (window.Notification && Notification.permission === 'granted') new Notification(`✅ Altın: ${x.long ? 'ALIM' : 'SATIM'} AÇ – ${x.ad}`, {body: `Giriş ${fmt(x.entry)} · Stop ${fmt(x.stop)} · Hedef ${fmt(x.tp)}`, icon: 'icon.svg'}); } catch {}
+}
+// Açık sinyalleri canlı fiyatla takip et: stop / hedef / süre
+function trackSigs(price) {
+  let ch = false; const now = Date.now() / 1000;
+  for (const x of sigs) if (x.res == null) {
+    const r = (price - x.entry) * (x.long ? 1 : -1) / Math.abs(x.entry - x.stop);
+    if (x.long ? price <= x.stop : price >= x.stop) { x.res = -1; x.closed = now; ch = true; }
+    else if (x.long ? price >= x.tp : price <= x.tp) { x.res = Math.abs(x.tp - x.entry) / Math.abs(x.entry - x.stop); x.closed = now; ch = true; }
+    else if (now >= x.until) { x.res = r; x.closed = now; x.timeout = true; ch = true; }
+  }
+  if (ch) { sigSave(); dirty = true; }
+}
+function renderSigs() {
+  const price = lastPrice, open = sigs.filter(x => x.res == null);
+  const lotOf = x => { const l = (+$('bal').value * +$('riskp').value / 100) / (Math.abs(x.entry - x.stop) * 100); return l < 0.01 ? '<0,01' : l.toFixed(2); };
+  $('openSig').innerHTML = open.length ? open.map(x => {
+    const r = price ? (price - x.entry) * (x.long ? 1 : -1) / Math.abs(x.entry - x.stop) : 0;
+    const left = Math.max(0, Math.round((x.until - Date.now() / 1000) / 3600 * 10) / 10);
+    return `<div class="sigbox ${x.long ? 'L' : 'S'}"><div class="sigtitle ${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} – AÇIK</div>
+      <table>${row('Strateji', `${x.ad} (${x.tf})`)}${row('Giriş', fmt(x.entry))}${row('Zarar-durdur', `<b class="sell">${fmt(x.stop)}</b>`)}${row('Hedef', `<b class="buy">${fmt(x.tp)}</b>`)}${row('Lot', lotOf(x))}
+      ${row('Şu an', price ? `${fmt(price)} → <b class="${r >= 0 ? 'buy' : 'sell'}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</b>` : '—')}${row('Kalan süre', left + ' saat')}</table>
+      <p class="note">Bu sinyal kilitli: ekrandaki diğer göstergeler değişse de plan aynı kalır. Stop ve hedefi emirle koyun.</p></div>`;
+  }).join('') : `<div class="sigbox"><div class="sigtitle hold">⏸ Sinyal yok – bekle</div><p class="note" style="margin:0">Yeni sinyal geldiğinde burada kilitli olarak görünür${notifyOn ? ' ve bildirim gelir' : ' (🔔 bildirimi açın)'}.</p></div>`;
+  const done = sigs.filter(x => x.res != null), w = done.filter(x => x.res > 0).length, tot = done.reduce((a, x) => a + x.res, 0);
+  $('scanStat').textContent = `${lastScan ? 'Son tarama ' + lastScan.toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'}) : 'Taranıyor…'} · Sonuçlanan ${done.length} sinyal, kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'}, toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R`;
+  $('sigHist').innerHTML = done.slice(-6).reverse().map(x => row(`${new Date(x.bar * 1000).toLocaleString('tr-TR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})} ${x.ad.split(' ')[0]} <b class="${x.long ? 'buy' : 'sell'}">${x.long ? 'AL' : 'SAT'}</b> @${fmt(x.entry)}`,
+    x.res > 0 ? `<b class="buy">✓ +${x.res.toFixed(1)}R</b>` : `<b class="sell">✗ ${x.res.toFixed(1)}R</b>`)).join('');
+  if (document.body.classList.contains('simple')) {
+    const x = open[0];
+    $('mverdict').innerHTML = x ? `<span class="${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} AÇIK</span>` : '<span class="hold">⏸ BEKLE</span>';
+    $('mplan').textContent = x ? `Stop ${fmt(x.stop)} · Hedef ${fmt(x.tp)}` : 'Sinyal bekleniyor';
+  }
+}
+setInterval(() => { if (lastPrice) trackSigs(lastPrice); renderSigs(); }, 1000);
+setTimeout(scanOnce, 1500); setInterval(scanOnce, 60000);
+// Görünüm: basit (varsayılan) / detaylı
+function setView(simple) { document.body.classList.toggle('simple', simple); dirty = true; $('viewtgl').textContent = simple ? '☰ Detay' : '✕ Basit'; try { localStorage.setItem('altin_view', simple ? 's' : 'd'); } catch {} setTimeout(() => { chart.applyOptions({width: $('chart').clientWidth}); }, 50); }
+let v0 = 's'; try { v0 = localStorage.getItem('altin_view') || 's'; } catch {}
+setView(v0 !== 'd');
+$('viewtgl').onclick = () => setView(!document.body.classList.contains('simple'));
 $('refresh').onclick = run; $('tf').onchange = run;
 run();
 </script>

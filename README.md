@@ -12,6 +12,7 @@ Altın (XAU/USD) için tarayıcıda çalışan teknik analiz uygulaması. `index
 - Pip & lot hesaplayıcı (stop/hedef mesafeleri pip cinsinden)
 - 🧠 Smart Money: FVG, order block, likidite avı, BOS/CHoCH
 - ADX rejim filtresi, Ichimoku, Stokastik RSI, Fibonacci altın cep
+- 🧭 Basit görünüm + Sinyal merkezi: 3 doğrulanmış strateji her dakika taranır, teyitli sinyal kilitlenir (stop/hedef/süre dolana kadar değişmez), canlı R takibi
 - 🏆 Fikir turnuvası: uzman ajanların stratejileri gerçek veride yarıştı; kazanan 🌅 Seans kırılımı (1s) ve 🔄 Ortalamaya dönüş (15dk) modları
 - 🎯 Yüksek isabet ve 📈 Dengeli modlar (1 saat): parametre araştırmasıyla seçildi, örneklem dışında doğrulandı
 - ✅ "Şimdi ne yapmalı?" kartı: İŞLEM AÇ yalnızca kapanmış mumla teyitli; 🟡 HAZIRLAN ön uyarısı; fırsat kaçtı uyarısı
