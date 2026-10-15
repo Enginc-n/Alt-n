@@ -20,6 +20,15 @@ for (const mode of ['normal', 'scalp']) {
     await p.close();
   }
 }
+// Her veri kaynağını tek tek dene (CORS dahil, gerçek tarayıcı içinden)
+{
+  const p = await b.newPage();
+  await p.goto(url);
+  const src = await p.evaluate(async () => Promise.all(SOURCES.map(async S => { const t = performance.now(); try { const d = await S.get('1h'); return `${S.name}: ✅ ${d.length} mum, son ${d[d.length - 1].close} (${Math.round(performance.now() - t)} ms)`; } catch (e) { return `${S.name}: ❌ ${e.message}`; } })));
+  console.log('\nVeri kaynakları:\n' + src.join('\n'));
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '\n### Veri kaynakları\n' + src.map(x => '- ' + x).join('\n') + '\n');
+  await p.close();
+}
 await b.close();
 const md = ['| Mod | Zaman | Fiyat | Karar | Canlı | Geriye dönük test |', '|---|---|---|---|---|---|',
   ...rows.map(r => `| ${r.mode} | ${r.tf} | ${r.price} | ${r.verdict} (${r.score}) | ${r.live} | ${r.bt} |`)].join('\n');
