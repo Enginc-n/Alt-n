@@ -51,7 +51,7 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <option value="1m">1 dk</option><option value="5m">5 dk</option><option value="15m">15 dk</option><option value="1h">1 saat</option>
     <option value="4h" selected>4 saat</option><option value="1d">Günlük</option>
   </select>
-  <select id="mode"><option value="normal">Normal mod</option><option value="scalp">⚡ Scalp (kısa vade)</option></select>
+  <select id="mode"><option value="normal">Normal mod</option><option value="scalp">⚡ Scalp (kısa vade)</option><option value="isabet">🎯 Yüksek isabet (1 saat)</option><option value="dengeli">📈 Dengeli (1 saat)</option></select>
   <button id="refresh">Yenile</button>
   <span id="src" class="note"></span>
   <span id="live" class="note"></span>
@@ -84,6 +84,10 @@ ul{padding-left:18px;margin:0;font-size:13px;line-height:1.5}
     <div class="card"><h2>Yükseliş / düşüş için ne gerekir?</h2><ul id="need"></ul></div>
     <div class="card"><h2>Teknikler – neden artar, neden düşer?</h2>
       <details><summary><b>Trend (EMA20/50, SMA200)</b></summary><p class="note">Fiyat SMA200 üzerindeyse ana trend yukarıdır; kurumlar bu çizgiyi izler. EMA20'nin EMA50'yi yukarı kesmesi kısa vadeli alıcıların güçlendiğini gösterir. Golden Cross (EMA50 ↑ SMA200) uzun vadeli boğa, Death Cross ayı sinyalidir.</p></details>
+      <details open><summary><b>🎯 Yüksek isabet ve 📈 Dengeli modlar (1 saat)</b></summary><p class="note">Bu iki mod, 1 saatlik gerçek PAXG geçmişinde 1.600 ayar kombinasyonu denenerek seçildi: ilk 94 günde seçildi, hiç görülmeyen son 63 günde doğrulandı (spread dahil).<br>
+<b>🎯 Yüksek isabet:</b> çok güçlü sinyal (skor ≥7), üst zaman dilimi uyumu, 10:00–20:00 TSİ, stop 3×ATR, hedef 0,5R. Doğrulamada <b>%68 kazanma</b> ama toplam yalnızca +1,7R (50 işlem) – yani <b>neredeyse başa baş</b>: kazançlar küçük, nadir kayıplar büyük (1 kayıp ≈ 2 kazancı siler).<br>
+<b>📈 Dengeli:</b> skor ≥3, yatay piyasa filtresi, 10:00–20:00 TSİ, stop 3×ATR, hedef 1,5R. Doğrulamada %49 kazanma, <b>+7,4R</b> (47 işlem). Kazanma oranı düşük ama kazançlar kayıplardan büyük.<br>
+Not: Bu sonuçlar tek bir dönemden; gelecekte aynı başarıyı garanti etmez. 15 dakika ve altında hiçbir ayar doğrulamayı tutarlı biçimde geçemedi.</p></details>
       <details><summary><b>⚡ Scalp modu (kısa vadeli kısa yükselişler)</b></summary><p class="note">1–5 dakikalık grafikte EMA9/EMA21 kesişimi ve son 3 mumun ivmesi kullanılır. Stop 1×ATR (dar), Hedef 1 = 1R, Hedef 2 = 2R: küçük ama sık kâr alınır. En iyi saatler Londra (10:00–13:00 TSİ) ve New York açılışı (15:30–18:00 TSİ); veri açıklamalarından 5 dk önce ve sonra işlem açmayın. Spread ve komisyon kısa işlemlerde kârın büyük kısmını yiyebilir – geriye dönük testteki sonuç bunları içermez.</p></details>
       <details><summary><b>Smart Money: FVG, Order Block, likidite avı</b></summary><p class="note">FVG (fiyat boşluğu): üç mumluk sert harekette oluşan dolmamış boşluk; fiyat çoğu zaman buraya geri döner. Order Block: sert hareketten önceki son ters mum, kurumların emir bıraktığı bölge. Likidite avı: fiyat önceki tepe/dibin stoplarını tetikleyip geri döner – güçlü dönüş sinyalidir. BOS trend devamı, CHoCH trend değişimi kırılımıdır.</p></details>
       <details><summary><b>ADX, Ichimoku, Stokastik RSI, Fibonacci</b></summary><p class="note">ADX trendin gücünü ölçer: 25 üstü trend, 20 altı yatay piyasa. Ichimoku bulutunun üstü boğa, altı ayı bölgesidir. Stokastik RSI 20 altından yukarı dönünce alım, 80 üstünden aşağı dönünce satım işaretidir. Fibonacci 0,5–0,618 “altın cep”, geri çekilmelerde en sık dönüş bölgesidir.</p></details>
@@ -172,10 +176,18 @@ function levels(d, w = 5) {
 }
 
 // ---------- Ajan ----------
-const STRONG = 4;
+// Parametre araştırmasıyla bulunan 1 saatlik ayarlar (seçim: ilk 94 gün, doğrulama: son 63 gün, spread dahil).
+// isabet: doğrulamada %68 kazanma, +1,7R / 50 işlem (≈ başa baş). dengeli: doğrulamada %49 kazanma, +7,4R / 47 işlem.
+const PRESETS = {
+  isabet: {base: 'normal', th: 7, sl: 3, tp: 0.5, htf: true, reg: false, sess: true, max: 48},
+  dengeli: {base: 'scalp', th: 3, sl: 3, tp: 1.5, htf: false, reg: true, sess: true, max: 48},
+};
+const preset = () => PRESETS[$('mode').value] || null;
+let STRONG = 4;
 function analyze(d) {
   const c = d.map(k => k.close), L = c.length - 1, price = c[L];
-  const SC = $('mode').value === 'scalp', nF = SC ? 9 : 20, nS = SC ? 21 : 50;
+  const PR = preset(); STRONG = PR ? PR.th : 4;
+  const SC = (PR ? PR.base : $('mode').value) === 'scalp', nF = SC ? 9 : 20, nS = SC ? 21 : 50;
   const e20 = ema(c, nF), e50 = ema(c, nS), s200 = sma(c, 200), r = rsi(c), a = atr(d), bb = bollinger(c);
   const e12 = ema(c, 12), e26 = ema(c, 26), macd = e12.map((x, i) => x - e26[i]), sig = ema(macd, 9), hist = macd.map((x, i) => x - sig[i]);
   const lv = levels(d);
@@ -204,11 +216,15 @@ function analyze(d) {
   score += sm.score + i2.score; why.push(...sm.reasons, ...i2.reasons);
   const verdict = score >= STRONG ? 'GÜÇLÜ AL' : score >= 1.5 ? 'AL' : score <= -STRONG ? 'GÜÇLÜ SAT' : score <= -1.5 ? 'SAT' : 'BEKLE';
   const long = score >= 0, A = a[L];
-  const stop = SC ? (long ? price - A : price + A) : long ? Math.min(price - 1.5 * A, (sup[0] ?? price) - 0.3 * A) : Math.max(price + 1.5 * A, (res[0] ?? price) + 0.3 * A);
-  const risk = Math.abs(price - stop);
+  let stop = SC ? (long ? price - A : price + A) : long ? Math.min(price - 1.5 * A, (sup[0] ?? price) - 0.3 * A) : Math.max(price + 1.5 * A, (res[0] ?? price) + 0.3 * A);
+  let risk = Math.abs(price - stop);
   let tp1 = long ? (res[0] && res[0] - price > risk ? res[0] : price + 1.5 * risk) : (sup[0] && price - sup[0] > risk ? sup[0] : price - 1.5 * risk);
   let tp2 = long ? price + 3 * risk : price - 3 * risk;
   if (SC) { tp1 = long ? price + risk : price - risk; tp2 = long ? price + 2 * risk : price - 2 * risk; }
+  if (PR) { // sabit ATR stop ve R hedefi
+    stop = long ? price - PR.sl * A : price + PR.sl * A; risk = PR.sl * A;
+    tp1 = long ? price + PR.tp * risk : price - PR.tp * risk; tp2 = long ? price + 2 * PR.tp * risk : price - 2 * PR.tp * risk;
+  }
 
   // geçmiş sinyaller: EMA20/50 kesişimi + RSI filtresi
   const marks = [];
@@ -284,7 +300,7 @@ chart.timeScale().subscribeVisibleLogicalRangeChange(r => r && rsiChart.timeScal
 // ---------- Geriye dönük test ----------
 let btMarks = [];
 function backtest(d, filt = true) {
-  const cost = +$('spread').value || 0, useHtf = filt && htf.length > 0, sess = filt && $('mode').value === 'scalp';
+  const PR = preset(), cost = +$('spread').value || 0, useHtf = filt && htf.length > 0 && (!PR || PR.htf), sess = filt && (PR ? PR.sess : $('mode').value === 'scalp');
   const trades = []; let pos = null, eq = 0, peak = 0, dd = 0; const curve = [0];
   for (let i = 250; i < d.length; i++) {
     const k = d[i];
@@ -292,6 +308,7 @@ function backtest(d, filt = true) {
       let R = null;
       if (pos.long) { if (k.low <= pos.stop) R = (Math.min(k.open, pos.stop) - pos.entry) / pos.risk; else if (k.high >= pos.tp) R = (pos.tp - pos.entry) / pos.risk; }
       else { if (k.high >= pos.stop) R = (pos.entry - Math.max(k.open, pos.stop)) / pos.risk; else if (k.low <= pos.tp) R = (pos.entry - pos.tp) / pos.risk; }
+      if (R == null && PR && ++pos.bars >= PR.max) R = (k.close - pos.entry) * (pos.long ? 1 : -1) / pos.risk; // süre doldu
       if (R != null) {
         R -= cost / pos.risk; // spread + komisyon
         trades.push({...pos, R, exit: k.time}); eq += R; peak = Math.max(peak, eq); dd = Math.max(dd, peak - eq); curve.push(eq); pos = null;
@@ -302,13 +319,13 @@ function backtest(d, filt = true) {
     const dir = Math.sign(A.score);
     if (useHtf && A.htfT !== dir) continue; // yalnızca üst trend yönünde
     if (sess) { const h = new Date(A.barClose * 1000).getUTCHours(); if (h < 7 || h >= 17) continue; } // Londra + New York seansı
-    if (filt && A.i2.regime === 'range' && !A.sm.sweep) continue; // yatay piyasada yalnızca likidite avı sonrası
+    if (filt && (!PR || PR.reg) && A.i2.regime === 'range' && !A.sm.sweep) continue; // yatay piyasada yalnızca likidite avı sonrası
     if (Math.abs(A.score) >= STRONG) {
       // giriş: sinyal mumu kapandıktan sonraki mumun açılışı (gerçekçi dolum)
       const nx = d[i + 1]; if (!nx) { pos = {pending: true, long: A.long, entry: A.price}; break; }
       const entry = nx.open, risk = Math.abs(entry - A.stop);
       if (A.long ? (entry <= A.stop || entry >= A.tp1) : (entry >= A.stop || entry <= A.tp1)) continue;
-      pos = {entry, stop: A.stop, tp: A.tp1, long: A.long, risk, time: nx.time};
+      pos = {entry, stop: A.stop, tp: A.tp1, long: A.long, risk, time: nx.time, bars: 0};
     }
   }
   const wins = trades.filter(t => t.R > 0), gw = wins.reduce((a, t) => a + t.R, 0), gl = -trades.filter(t => t.R <= 0).reduce((a, t) => a + t.R, 0);
@@ -455,7 +472,7 @@ async function run() {
 setInterval(() => { if (dirty) { dirty = false; render(); showPrice(lastPrice); } }, 1000);
 ['spread'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).onchange = () => { store.set('altin_' + id, $(id).value); showBacktest(backtest(data), backtest(data, false)); render(); }; });
 ['bal', 'riskp', 'pipsize'].forEach(id => { const v = store.get('altin_' + id); if (v) $(id).value = v; $(id).oninput = () => { calc(); render(); }; });
-$('mode').onchange = () => { if ($('mode').value === 'scalp' && ['4h', '1d', '1h'].includes($('tf').value)) $('tf').value = '5m'; run(); };
+$('mode').onchange = () => { const m = $('mode').value; if (PRESETS[m]) $('tf').value = '1h'; else if (m === 'scalp' && ['4h', '1d', '1h'].includes($('tf').value)) $('tf').value = '5m'; run(); };
 $('refresh').onclick = run; $('tf').onchange = run;
 run();
 </script>
