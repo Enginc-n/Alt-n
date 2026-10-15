@@ -29,7 +29,7 @@ for (const [mode, tf] of CONFIGS) {
   p.on('pageerror', e => console.log('HATA', e.message));
   await p.route(/\/api\/v3\/klines/, async route => {
     const tfq = new URL(route.request().url()).searchParams.get('interval');
-    route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(tfq))});
+    route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(tfq))}).catch(() => {}); // sayfa kapandıysa yok say
   });
   await p.routeWebSocket?.(/binance/, ws => {}); // canlı akışı kapat: test sabit veriyle yapılır
   await p.goto('file://' + process.cwd() + '/index.html');

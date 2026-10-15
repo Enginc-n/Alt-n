@@ -18,15 +18,16 @@ async function hist(tf) {
 }
 const ideaSrc = readdirSync('test/ideas').filter(f => f.endsWith('.js')).map(f => readFileSync('test/ideas/' + f, 'utf8')).join('\n');
 
+process.on('unhandledRejection', e => console.log('YAKALANMAMIŞ', e?.message));
 const b = await chromium.launch({args: ['--disable-dev-shm-usage', '--js-flags=--max-old-space-size=4096']});
 const rows = [];
 for (const tf of ['15m', '1h']) for (const mode of ['normal', 'dengeli']) {
   if (mode === 'dengeli' && tf !== '1h') continue;
   const p = await b.newPage();
-  p.on('pageerror', e => console.log('HATA', e.message));
+  p.on('pageerror', e => console.log('HATA', e.message)); p.on('crash', () => console.log('SAYFA ÇÖKTÜ'));
   await p.route(/\/api\/v3\/klines/, async route => {
     const q = new URL(route.request().url()).searchParams.get('interval');
-    route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(q))});
+    route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(q))}).catch(() => {}); // sayfa kapandıysa yok say
   });
   await p.routeWebSocket?.(/binance/, () => {});
   await p.goto('file://' + process.cwd() + '/index.html');

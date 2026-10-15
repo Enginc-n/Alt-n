@@ -24,7 +24,7 @@ for (const [mode, tf] of [['normal', '15m'], ['normal', '1h'], ['scalp', '15m'],
   p.on('pageerror', e => console.log('HATA', e.message));
   await p.route(/\/api\/v3\/klines/, async route => {
     const q = new URL(route.request().url()).searchParams.get('interval');
-    route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(q))});
+    route.fulfill({contentType: 'application/json', headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(await hist(q))}).catch(() => {}); // sayfa kapandıysa yok say
   });
   await p.routeWebSocket?.(/binance/, () => {});
   await p.goto('file://' + process.cwd() + '/index.html');
