@@ -60,6 +60,9 @@ p.note{margin:10px 0 0}
 body.simple .adv{display:none!important}
 #openSig .sigbox{border-radius:12px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.03);border:2px solid #333}
 #openSig .sigbox.L{border-color:var(--up)}#openSig .sigbox.S{border-color:var(--down)}
+#openSig .exitbox{border:2px solid var(--down);border-radius:10px;padding:10px;margin-bottom:10px;background:rgba(239,83,80,.12);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(239,83,80,.25)}}@media(prefers-reduced-motion:reduce){#openSig .exitbox{animation:none}}
+.closebtn{width:100%;margin-top:6px;min-height:44px;font-weight:700;background:var(--down);color:#fff;border:0;border-radius:10px}.closebtn.ghost{background:transparent;color:var(--muted);border:1px solid #333;font-weight:500}
 #openSig .sigtitle{font-size:22px;font-weight:800;margin-bottom:6px}
 #mbar{display:none}
 #actcard{position:relative;overflow:hidden;border:1px solid var(--line2);background:linear-gradient(160deg,var(--panel2),var(--panel) 60%);padding:18px}
@@ -727,7 +730,7 @@ try { const m = localStorage.getItem('altin_mode'), t = localStorage.getItem('al
 const STRATS = [{mode: 'seans', tf: '1h', ad: '🌅 Seans kırılımı'}, {mode: 'dengeli', tf: '1h', ad: '📈 Dengeli'}, {mode: 'donus', tf: '15m', ad: '🔄 Ortalamaya dönüş'}, {mode: 'kaplumbaga', tf: '1h', ad: '🐢 Kaplumbağa'}, {mode: 'elder', tf: '15m', ad: '📐 Elder üçlü ekran'}];
 let sigs = []; try { sigs = JSON.parse(localStorage.getItem('altin_sigs') || '[]'); } catch {}
 const sigSave = () => { try { localStorage.setItem('altin_sigs', JSON.stringify(sigs.slice(-100))); } catch {} };
-let lastScan = null, scanBusy = false;
+let lastScan = null, scanBusy = false, lastSigHtml = '';
 async function scanOnce() {
   if (scanBusy) return; scanBusy = true;
   try {
@@ -743,17 +746,44 @@ async function scanOnce() {
       finally { $('mode').value = save.m; $('tf').value = save.t; htf = save.h; STRONG = save.s; }
       const bar = d[d.length - 1];
       if (!E.ok || sigs.some(x => x.mode === st.mode && x.bar === bar.time)) continue;
-      // Aynı yönde farklı stratejilerin sinyalleri birlikte açık kalabilir; ters yönde sinyal açılmaz (çelişkiyi önler)
-      if (sigs.some(x => x.res == null && (x.long !== P.long || x.mode === st.mode))) continue;
       const sg = P.long ? 1 : -1, dS = Math.abs(P.price - P.stop), dT = Math.abs(P.tp1 - P.price), e = bar.open;
       const maxBars = (P.sig && P.sig.max) || (PRESETS[st.mode] && PRESETS[st.mode].max) || 48;
       const x = {id: st.mode + bar.time, mode: st.mode, ad: st.ad, tf: st.tf, bar: bar.time, long: P.long, entry: e, stop: e - sg * dS, tp: e + sg * dT,
-        until: bar.time + maxBars * TF_SEC[st.tf], res: null};
+        dS, dT, until: bar.time + maxBars * TF_SEC[st.tf], res: null};
+      // Ters yönde açık pozisyon varsa: önce "elindekini kapat" uyarısı, yeni sinyal pozisyon kapanınca açılır
+      const opp = sigs.filter(o => o.res == null && o.long !== P.long);
+      if (opp.length) {
+        for (const o of opp) if (!o.exit) { o.exit = {t: bar.time, price: e, ad: st.ad}; exitAlert(o, x); }
+        if (!pendRev || pendRev.long !== x.long) { pendRev = x; revSave(); }
+        sigSave(); dirty = true; continue;
+      }
+      if (sigs.some(o => o.res == null && o.mode === st.mode)) continue; // aynı stratejiden ikinci sinyal açılmaz
       sigs.push(x); sigSave(); sigAlert(x); dirty = true;
     }
     lastScan = new Date();
   } catch (e) { console.warn('tarama', e); }
   scanBusy = false; renderSigs();
+}
+let pendRev = null; try { pendRev = JSON.parse(localStorage.getItem('altin_rev') || 'null'); } catch {}
+const revSave = () => { try { localStorage.setItem('altin_rev', JSON.stringify(pendRev)); } catch {} };
+function exitAlert(o, x) {
+  if (!notifyOn) return;
+  try { navigator.vibrate && navigator.vibrate([500, 150, 500]); } catch {}
+  try { if (window.Notification && Notification.permission === 'granted') new Notification(o.long ? '📤 Altın: ALIMI KAPAT – elindekileri SAT' : '📤 Altın: SATIMI KAPAT – geri AL', {body: `${x.ad} ters yönde sinyal verdi. Pozisyonu kapatın; ardından ${x.long ? 'ALIM' : 'SATIM'} sinyali gelecek.`, icon: 'icon.svg'}); } catch {}
+}
+// Ters pozisyonlar kapandıktan sonra bekleyen yeni sinyali aç (giriş: o anki fiyat, aynı stop/hedef mesafeleri)
+function activateRev() {
+  if (!pendRev || sigs.some(o => o.res == null && o.long !== pendRev.long)) return;
+  const now = Date.now() / 1000, x = pendRev; pendRev = null; revSave();
+  if (now >= x.until || !lastPrice) return;
+  const sg = x.long ? 1 : -1, e = lastPrice;
+  Object.assign(x, {id: x.id + 'r', entry: e, stop: e - sg * x.dS, tp: e + sg * x.dT, rev: true});
+  sigs.push(x); sigSave(); sigAlert(x); dirty = true;
+}
+function closeSig(id) {
+  const x = sigs.find(o => o.id === id); if (!x || x.res != null || !lastPrice) return;
+  x.res = (lastPrice - x.entry) * (x.long ? 1 : -1) / Math.abs(x.entry - x.stop); x.closed = Date.now() / 1000; x.manual = true;
+  sigSave(); activateRev(); dirty = true; renderSigs();
 }
 function sigAlert(x) {
   if (!notifyOn) return;
@@ -769,26 +799,31 @@ function trackSigs(price) {
     else if (x.long ? price >= x.tp : price <= x.tp) { x.res = Math.abs(x.tp - x.entry) / Math.abs(x.entry - x.stop); x.closed = now; ch = true; }
     else if (now >= x.until) { x.res = r; x.closed = now; x.timeout = true; ch = true; }
   }
-  if (ch) { sigSave(); dirty = true; }
+  if (ch) { sigSave(); activateRev(); dirty = true; }
 }
 function renderSigs() {
   const price = lastPrice, open = sigs.filter(x => x.res == null);
   const lotOf = x => { const l = (+$('bal').value * +$('riskp').value / 100) / (Math.abs(x.entry - x.stop) * 100); return l < 0.01 ? '<0,01' : l.toFixed(2); };
-  $('openSig').innerHTML = open.length ? open.map(x => {
+  const html = open.length ? open.map(x => {
     const r = price ? (price - x.entry) * (x.long ? 1 : -1) / Math.abs(x.entry - x.stop) : 0;
     const left = Math.max(0, Math.round((x.until - Date.now() / 1000) / 3600 * 10) / 10);
-    return `<div class="sigbox ${x.long ? 'L' : 'S'}"><div class="sigtitle ${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} – AÇIK</div>
+    const ex = x.exit ? `<div class="exitbox"><div class="sigtitle sell">📤 POZİSYONU KAPAT – ${x.long ? 'elindekileri SAT' : 'geri AL'}</div>
+      <p style="margin:4px 0">${x.exit.ad} ters yönde sinyal verdi. Bu ${x.long ? 'alımı' : 'satışı'} şimdi kapatın (şu an ${r >= 0 ? '+' : ''}${r.toFixed(2)}R).${pendRev ? ` Kapattıktan sonra <b>${pendRev.long ? 'ALIM' : 'SATIM'}</b> sinyali açılacak.` : ''}</p>
+      <button class="closebtn" data-id="${x.id}">✅ Kapattım</button></div>` : '';
+    return `<div class="sigbox ${x.long ? 'L' : 'S'}">${ex}<div class="sigtitle ${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} – AÇIK${x.rev ? ' (yön değişimi)' : ''}</div>
       <table>${row('Strateji', `${x.ad} (${x.tf})`)}${row('Giriş', fmt(x.entry))}${row('Zarar-durdur', `<b class="sell">${fmt(x.stop)}</b>`)}${row('Hedef', `<b class="buy">${fmt(x.tp)}</b>`)}${row('Lot', lotOf(x))}
       ${row('Şu an', price ? `${fmt(price)} → <b class="${r >= 0 ? 'buy' : 'sell'}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</b>` : '—')}${row('Kalan süre', left + ' saat')}</table>
-      <p class="note">Bu sinyal kilitli: ekrandaki diğer göstergeler değişse de plan aynı kalır. Stop ve hedefi emirle koyun.</p></div>`;
+      <p class="note">Bu sinyal kilitli: ekrandaki diğer göstergeler değişse de plan aynı kalır. Stop ve hedefi emirle koyun.</p>${x.exit ? '' : `<button class="closebtn ghost" data-id="${x.id}">Pozisyonu kendim kapattım</button>`}</div>`;
   }).join('') : `<div class="sigbox"><div class="sigtitle hold">⏸ Sinyal yok – bekle</div><p class="note" style="margin:0">Yeni sinyal geldiğinde burada kilitli olarak görünür${notifyOn ? ' ve bildirim gelir' : ' (🔔 bildirimi açın)'}.</p></div>`;
+  if (html !== lastSigHtml) { $('openSig').innerHTML = html; lastSigHtml = html; } // gereksiz yeniden çizim yok: düğmeye basış kaybolmaz
   const done = sigs.filter(x => x.res != null), w = done.filter(x => x.res > 0).length, tot = done.reduce((a, x) => a + x.res, 0);
   $('scanStat').textContent = `${lastScan ? 'Son tarama ' + lastScan.toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'}) : 'Taranıyor…'} · Sonuçlanan ${done.length} sinyal, kazanma %${done.length ? (w / done.length * 100).toFixed(0) : '—'}, toplam ${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R`;
   $('sigHist').innerHTML = done.slice(-6).reverse().map(x => row(`${new Date(x.bar * 1000).toLocaleString('tr-TR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})} ${x.ad.split(' ')[0]} <b class="${x.long ? 'buy' : 'sell'}">${x.long ? 'AL' : 'SAT'}</b> @${fmt(x.entry)}`,
     x.res > 0 ? `<b class="buy">✓ +${x.res.toFixed(1)}R</b>` : `<b class="sell">✗ ${x.res.toFixed(1)}R</b>`)).join('');
   if (document.body.classList.contains('simple')) {
     const x = open[0];
-    $('mverdict').innerHTML = x ? `<span class="${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} AÇIK</span>` : '<span class="hold">⏸ BEKLE</span>';
+    const xe = open.find(o => o.exit);
+    $('mverdict').innerHTML = xe ? `<span class="sell">📤 ${xe.long ? 'ELİNDEKİNİ SAT' : 'GERİ AL'}</span>` : x ? `<span class="${x.long ? 'buy' : 'sell'}">📌 ${x.long ? 'ALIM' : 'SATIM'} AÇIK</span>` : '<span class="hold">⏸ BEKLE</span>';
     $('mplan').textContent = x ? `Stop ${fmt(x.stop)} · Hedef ${fmt(x.tp)}` : 'Sinyal bekleniyor';
   }
 }
@@ -798,6 +833,7 @@ setTimeout(scanOnce, 1500); setInterval(scanOnce, 60000);
 function setView(simple) { document.body.classList.toggle('simple', simple); dirty = true; $('viewtgl').textContent = simple ? '☰ Detay' : '✕ Basit'; try { localStorage.setItem('altin_view', simple ? 's' : 'd'); } catch {} setTimeout(() => { chart.applyOptions({width: $('chart').clientWidth}); }, 50); }
 let v0 = 's'; try { v0 = localStorage.getItem('altin_view') || 's'; } catch {}
 setView(v0 !== 'd');
+document.addEventListener('click', e => { const b = e.target.closest('.closebtn'); if (b) closeSig(b.dataset.id); });
 $('viewtgl').onclick = () => setView(!document.body.classList.contains('simple'));
 $('refresh').onclick = run; $('tf').onchange = run;
 run();
