@@ -190,7 +190,7 @@ if aMsg != ""
 alertcondition(evLong, "AL", "Kripto Ajan {{ticker}}: AL ({{close}})")
 alertcondition(evShort, "SAT", "Kripto Ajan {{ticker}}: SAT ({{close}})")
 alertcondition(evTp1, "TP1 + SL girişe", "Kripto Ajan {{ticker}}: TP1 alındı, SL girişe")
-alertcondition(evClose, "Pozisyon kapat", "Kripto Ajan {{ticker}}: POZİSYON KAPAT ({{close}})")
+alertcondition(evClose, "Pozisyon kapat", "Kripto Ajan {{ticker}}: POZİSYON KAPAT")
 
 // ───────── PANEL (sağ üst, otomatik) ─────────
 var table tP = table.new(position.top_right, 2, 9, border_width=1, border_color=color.new(color.gray, 60))
