@@ -22,7 +22,7 @@ for (const x of sigs) {
   const dir = x.long ? '🟢 ALIM' : '🔴 SATIM';
   const txt = `${dir} SİNYALİ – Altın (PAXG/XAU) | ${x.ad} (${x.tf})\n` +
     `Giriş: $${fmt(x.entry)}  (şu an $${fmt(x.price)})\nStop: $${fmt(x.stop)}\nHedef 1: $${fmt(x.tp)}  (yarısını kapat, stopu girişe çek)\nHedef 2: $${fmt(x.tp + (x.tp - x.entry))}\n` +
-    (x.ai != null ? `🤖 AI güven skoru: %${(x.ai * 100).toFixed(0)} (ortalama %${(x.aiBase * 100).toFixed(0)})\n` : '') +
+    (x.ai != null ? `🤖 AI skoru (bilgi amaçlı): %${(x.ai * 100).toFixed(0)} (ortalama %${(x.aiBase * 100).toFixed(0)})\n` : '') +
     `Risk: kasanın %1'i – lotu uygulamadan hesaplayın.\nhttps://enginc-n.github.io/Alt-n/\n⚠️ Yatırım tavsiyesi değildir.`;
   const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({chat_id: CHAT, text: txt})});
   console.log(x.id, r.status);
