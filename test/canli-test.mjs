@@ -9,6 +9,7 @@ for (const mode of ['normal', 'scalp']) {
   for (const tf of mode === 'scalp' ? ['1m', '5m', '15m'] : ['15m', '1h', '4h', '1d']) {
     const p = await b.newPage(); const errs = [];
     p.on('pageerror', e => errs.push(e.message));
+    await p.addInitScript(() => { try { localStorage.clear(); localStorage.setItem('altin_view', 'd'); } catch {} }); // detaylı görünüm
     await p.goto(url);
     await p.waitForFunction(() => document.getElementById('verdict').textContent !== '…', null, {timeout: 60000});
     await p.selectOption('#mode', mode); await p.selectOption('#tf', tf);
@@ -19,6 +20,19 @@ for (const mode of ['normal', 'scalp']) {
     rows.push(r); console.log(JSON.stringify(r, null, 1));
     await p.close();
   }
+}
+// Basit görünüm: sinyal merkezi gerçek veriyle tarama yapıyor mu?
+{
+  const p = await b.newPage(); const errs = [];
+  p.on('pageerror', e => errs.push(e.message));
+  await p.addInitScript(() => { try { localStorage.clear(); } catch {} });
+  await p.goto(url);
+  await p.waitForFunction(() => /Son tarama/.test(document.getElementById('scanStat').textContent), null, {timeout: 90000});
+  const t = await p.$eval('#sigcenter', e => e.innerText.replace(/\s+/g, ' ').slice(0, 300));
+  console.log('\nSinyal merkezi:', t, errs.join('; '));
+  if (errs.length) fail = true;
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '\n### Sinyal merkezi\n' + t + '\n');
+  await p.close();
 }
 // Her veri kaynağını tek tek dene (CORS dahil, gerçek tarayıcı içinden)
 {
