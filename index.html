@@ -130,7 +130,7 @@ b{font-weight:600;color:var(--text)}
       <div id="openSig"></div>
       <div id="scanStat" class="note"></div>
       <table id="sigHist"></table>
-      <p class="note">5 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🐢 Kaplumbağa (1s), 🔄 Ortalamaya dönüş (15dk), 📐 Elder üçlü ekran (15dk) – birlikte günde ortalama ~6 sinyal (geçmiş veriye göre). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı yönde birden fazla sinyal açık olabilir, ters yönde sinyal verilmez.</p></div>
+      <p class="note">5 test edilmiş strateji her dakika taranır: 🌅 Seans kırılımı (1s), 📈 Dengeli (1s), 🐢 Kaplumbağa (1s), 🔄 Ortalamaya dönüş (15dk), 📐 Elder üçlü ekran (15dk) – birlikte günde ortalama ~6 sinyal (geçmiş veriye göre). Sinyal yalnızca <b>kapanmış mumla</b> verilir ve <b>kilitlenir</b> – stop, hedef ya da süre dolana kadar değişmez. Aynı yönde birden fazla sinyal açık olabilir; ters yönde sinyal gelirse önce "📤 POZİSYONU KAPAT" uyarısı verilir.<br><span id="ver">Sürüm: 15.10 – yön değişimi</span></p></div>
     <div class="card adv" id="actcard"><h2>Şimdi ne yapmalı?</h2><div id="action" class="big">…</div><div id="actdetail"></div><p id="actnote" class="note"></p><p id="modeinfo" class="note" style="border-top:1px solid #2a2f3a;padding-top:6px"></p></div>
     <div class="card adv"><h2>Ajanın kararı</h2><div id="verdict" class="big">…</div><div id="score" class="note"></div></div>
     <div class="card adv"><h2>İşlem planı</h2><table id="plan"></table></div>
@@ -664,7 +664,11 @@ $('notify').onclick = async () => {
 try { new IntersectionObserver(([e]) => $('mbar').classList.toggle('show', !e.isIntersecting)).observe($('actcard')); } catch { $('mbar').classList.add('show'); }
 };
 notifyLabel();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js', {updateViaCache: 'none'}).then(r => r.update()).catch(() => {});
+  // yeni sürüm devraldığında sayfayı bir kez yenile
+  let reloaded = false; navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+}
 
 // ---------- Canlı akış (Binance WebSocket) ----------
 function showPrice(p) {
